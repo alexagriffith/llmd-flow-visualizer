@@ -41,40 +41,23 @@ footer a:hover{color:var(--accent)}
   <span>llm-d</span>
 </div>
 
-<h1><span class="grad">Flow Visualizers</span></h1>
+<h1><span class="grad">Flow Visualizer</span></h1>
 <p class="tagline">Interactive animated architecture flows for llm-d — CNCF Sandbox distributed inference platform</p>
 
 <a href="llmd-flow-canvas.html" class="card">
   <div class="card-header">
     <div class="card-icon" style="background:#58a6ff22;border:1px solid #58a6ff44">▶️</div>
     <div>
-      <div class="card-title">llm-d Architecture — Full Flow</div>
-      <div class="card-subtitle">Cache Hit · Cache Miss · Disaggregated Serving</div>
+      <div class="card-title">llm-d Architecture Flow Visualizer</div>
+      <div class="card-subtitle">Interactive Step-by-Step Flows</div>
     </div>
   </div>
-  <div class="card-desc">Complete end-to-end flow through Gateway API, EPP routing, KV cache awareness, and disaggregated serving with NIXL GPU-to-GPU transfer. Based on llm-d v0.7 architecture.</div>
+  <div class="card-desc">Complete end-to-end flow through Gateway API, EPP routing, KV cache awareness, and disaggregated serving with NIXL GPU-to-GPU transfer. Select different routing scenarios to see how the same architecture handles cache hits, cache misses, and prefill/decode disaggregation.</div>
   <div class="card-stats">
-    <span class="stat stat-blue">3 Flows</span>
+    <span class="stat stat-blue">3 Flow Types</span>
     <span class="stat stat-green">KV Cache Routing</span>
     <span class="stat stat-orange">35 Steps</span>
-    <span class="stat stat-purple">CNCF</span>
-  </div>
-</a>
-
-<a href="pipeline-visualizer.html" class="card">
-  <div class="card-header">
-    <div class="card-icon" style="background:#d2a8ff22;border:1px solid #d2a8ff44">🔄</div>
-    <div>
-      <div class="card-title">llmd Pipeline Visualizer — Request Flow</div>
-      <div class="card-subtitle">Multi-Model Routing with Fallback</div>
-    </div>
-  </div>
-  <div class="card-desc">Step-by-step animated visualization showing how requests flow through an llmd daemon pipeline: primary model routing, fallback triggers, load balancer decisions, and speculative decoding paths.</div>
-  <div class="card-stats">
-    <span class="stat stat-purple">5 Flow Types</span>
-    <span class="stat stat-blue">Fallback Chain</span>
-    <span class="stat stat-orange">Load Balance</span>
-    <span class="stat stat-green">Spec Decode</span>
+    <span class="stat stat-purple">CNCF Sandbox</span>
   </div>
 </a>
 
