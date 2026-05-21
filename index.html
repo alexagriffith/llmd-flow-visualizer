@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>llmd — Configurable LLM Daemon</title>
+<title>llm-d Flow Visualizer</title>
 <style>
 :root{--bg:#0a0a0f;--bg2:#161b22;--border:#21262d;--text:#e2e8f0;--dim:#8b949e;--accent:#58a6ff}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -27,29 +27,10 @@ h1 .grad{background:linear-gradient(135deg,#58a6ff,#d2a8ff,#f0883e);-webkit-back
 .stat-blue{color:#58a6ff;border-color:#58a6ff44;background:#58a6ff11}
 .stat-green{color:#3fb950;border-color:#3fb95044;background:#3fb95011}
 .stat-orange{color:#f0883e;border-color:#f0883e44;background:#f0883e11}
-.stat-gold{color:#e3b341;border-color:#e3b34144;background:#e3b34111}
-.stat-red{color:#f85149;border-color:#f8514944;background:#f8514911}
 .stat-purple{color:#d2a8ff;border-color:#d2a8ff44;background:#d2a8ff11}
 footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:#484f58}
 footer a{color:#484f58;text-decoration:none}
 footer a:hover{color:var(--accent)}
-.modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
-.modal-backdrop.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;max-width:700px;width:90%;max-height:85vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.modal-title{font-size:20px;font-weight:700;margin-bottom:4px}
-.modal-sub{font-size:13px;color:var(--dim);margin-bottom:20px}
-.modal-close{float:right;background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}
-.modal-close:hover{color:var(--text);background:#30363d}
-.config-link{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text);padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;transition:all .15s}
-.config-link:hover{border-color:var(--accent);transform:translateX(4px);background:#58a6ff08}
-.config-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.config-info{flex:1}
-.config-name{font-size:14px;font-weight:600}
-.config-detail{font-size:11px;color:var(--dim)}
-.config-type{font-size:11px;color:var(--dim);flex-shrink:0}
-.modal-footer{margin-top:16px;padding-top:12px;border-top:1px solid var(--border);text-align:center}
-.modal-footer a{color:var(--dim);font-size:12px;text-decoration:none}
-.modal-footer a:hover{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -57,38 +38,38 @@ footer a:hover{color:var(--accent)}
 
 <div class="brand">
   <div class="brand-icon">L</div>
-  <span>llmd</span>
+  <span>llm-d</span>
 </div>
 
-<h1>Configurable LLM Daemon<br><span class="grad">Interactive Setup & Flow Visualizers</span></h1>
-<p class="tagline">Local-first orchestration for multi-model routing, fallback chains, and edge-native inference pipelines</p>
+<h1><span class="grad">Flow Visualizers</span></h1>
+<p class="tagline">Interactive animated architecture flows for llm-d — CNCF Sandbox distributed inference platform</p>
 
-<a href="daemon-configurator.html" class="card">
+<a href="llmd-flow-canvas.html" class="card">
   <div class="card-header">
-    <div class="card-icon" style="background:#58a6ff22;border:1px solid #58a6ff44">⚙️</div>
+    <div class="card-icon" style="background:#58a6ff22;border:1px solid #58a6ff44">▶️</div>
     <div>
-      <div class="card-title">Daemon Configurator — Visual Config Builder</div>
-      <div class="card-subtitle">llmd.toml / llmd.yaml Generator</div>
+      <div class="card-title">llm-d Architecture — Full Flow</div>
+      <div class="card-subtitle">Cache Hit · Cache Miss · Disaggregated Serving</div>
     </div>
   </div>
-  <div class="card-desc">Interactive visual editor for building llmd daemon configurations. Define model endpoints, routing rules, fallback chains, and orchestration policies. Export to production-ready TOML or YAML with validation.</div>
+  <div class="card-desc">Complete end-to-end flow through Gateway API, EPP routing, KV cache awareness, and disaggregated serving with NIXL GPU-to-GPU transfer. Based on llm-d v0.7 architecture.</div>
   <div class="card-stats">
-    <span class="stat stat-blue">Visual Builder</span>
-    <span class="stat stat-green">Live Validation</span>
-    <span class="stat stat-orange">Export TOML/YAML</span>
-    <span class="stat stat-purple">12 Templates</span>
+    <span class="stat stat-blue">3 Flows</span>
+    <span class="stat stat-green">KV Cache Routing</span>
+    <span class="stat stat-orange">35 Steps</span>
+    <span class="stat stat-purple">CNCF</span>
   </div>
 </a>
 
 <a href="pipeline-visualizer.html" class="card">
   <div class="card-header">
-    <div class="card-icon" style="background:#d2a8ff22;border:1px solid #d2a8ff44">▶️</div>
+    <div class="card-icon" style="background:#d2a8ff22;border:1px solid #d2a8ff44">🔄</div>
     <div>
-      <div class="card-title">Pipeline Visualizer — Request Flow Animation</div>
+      <div class="card-title">llmd Pipeline Visualizer — Request Flow</div>
       <div class="card-subtitle">Multi-Model Routing with Fallback</div>
     </div>
   </div>
-  <div class="card-desc">Step-by-step animated visualization showing how requests flow through your llmd pipeline: primary model routing, fallback triggers, load balancer decisions, cache hits, and speculative decoding paths.</div>
+  <div class="card-desc">Step-by-step animated visualization showing how requests flow through an llmd daemon pipeline: primary model routing, fallback triggers, load balancer decisions, and speculative decoding paths.</div>
   <div class="card-stats">
     <span class="stat stat-purple">5 Flow Types</span>
     <span class="stat stat-blue">Fallback Chain</span>
@@ -97,293 +78,15 @@ footer a:hover{color:var(--accent)}
   </div>
 </a>
 
-<div class="card" style="cursor:pointer" onclick="document.getElementById('templates-modal').classList.add('show')">
-  <div class="card-header">
-    <div class="card-icon" style="background:#f0883e22;border:1px solid #f0883e44">📋</div>
-    <div>
-      <div class="card-title">Configuration Templates — Ready-to-Deploy</div>
-      <div class="card-subtitle">12 Production Templates · vLLM · Ollama · HF · OpenAI</div>
-    </div>
-  </div>
-  <div class="card-desc">Pre-built llmd.toml configurations for common deployment scenarios: local-only inference, hybrid cloud-edge routing, multi-provider fallback, speculative decoding, and enterprise load balancing.</div>
-  <div class="card-stats">
-    <span class="stat stat-orange">12 Templates</span>
-    <span class="stat stat-gold">Production-Ready</span>
-    <span class="stat stat-blue">Copy & Deploy</span>
-    <span class="stat stat-purple">Documented</span>
-  </div>
-</div>
-
-<div id="templates-modal" class="modal-backdrop" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal">
-    <button class="modal-close" onclick="document.getElementById('templates-modal').classList.remove('show')">&times;</button>
-    <div class="modal-title">Configuration Templates</div>
-    <div class="modal-sub">Select a template to view the full llmd.toml configuration</div>
-
-    <a href="#" class="config-link" onclick="showTemplate('local-vllm'); return false;">
-      <div class="config-dot" style="background:#58a6ff"></div>
-      <div class="config-info">
-        <div class="config-name">Local vLLM — Single Model Inference</div>
-        <div class="config-detail">Minimal config · localhost:8000 · No fallback</div>
-      </div>
-      <div class="config-type">Local-Only</div>
-    </a>
-
-    <a href="#" class="config-link" onclick="showTemplate('ollama-multi'); return false;">
-      <div class="config-dot" style="background:#d2a8ff"></div>
-      <div class="config-info">
-        <div class="config-name">Ollama Multi-Model — Load Balancing</div>
-        <div class="config-detail">3 models · Round-robin · Health checks</div>
-      </div>
-      <div class="config-type">Load Balanced</div>
-    </a>
-
-    <a href="#" class="config-link" onclick="showTemplate('hybrid-fallback'); return false;">
-      <div class="config-dot" style="background:#f0883e"></div>
-      <div class="config-info">
-        <div class="config-name">Hybrid Cloud-Edge — Primary + Fallback</div>
-        <div class="config-detail">Local vLLM → OpenAI · Timeout 5s · Cost tracking</div>
-      </div>
-      <div class="config-type">Hybrid</div>
-    </a>
-
-    <a href="#" class="config-link" onclick="showTemplate('spec-decode'); return false;">
-      <div class="config-dot" style="background:#3fb950"></div>
-      <div class="config-info">
-        <div class="config-name">Speculative Decoding — Draft + Target</div>
-        <div class="config-detail">Llama-8B draft → Llama-70B target · 3x speedup</div>
-      </div>
-      <div class="config-type">Advanced</div>
-    </a>
-
-    <a href="#" class="config-link" onclick="showTemplate('multi-provider'); return false;">
-      <div class="config-dot" style="background:#e3b341"></div>
-      <div class="config-info">
-        <div class="config-name">Multi-Provider Cascade — 5-Tier Fallback</div>
-        <div class="config-detail">Local → Anthropic → OpenAI → Bedrock → Vertex</div>
-      </div>
-      <div class="config-type">Enterprise</div>
-    </a>
-
-    <a href="#" class="config-link" onclick="showTemplate('edge-native'); return false;">
-      <div class="config-dot" style="background:#f85149"></div>
-      <div class="config-info">
-        <div class="config-name">Edge-Native — Distributed Inference</div>
-        <div class="config-detail">4 edge nodes · Geo routing · P99 &lt; 50ms</div>
-      </div>
-      <div class="config-type">Edge</div>
-    </a>
-
-    <div class="modal-footer">
-      <a href="https://github.com/llmd/llmd/tree/main/examples">View all examples →</a>
-      &nbsp;·&nbsp;
-      <a href="https://llmd.ai/docs/configuration">Configuration reference →</a>
-    </div>
-  </div>
-</div>
-
-<a href="llmd-flow-canvas.html" class="card">
-  <div class="card-header">
-    <div class="card-icon" style="background:#3fb95022;border:1px solid #3fb95044">🏗️</div>
-    <div>
-      <div class="card-title">llm-d Architecture — CNCF Flow</div>
-      <div class="card-subtitle">Kubernetes-Native Distributed Inference</div>
-    </div>
-  </div>
-  <div class="card-desc">Original llm-d flow visualizer showing Gateway API, EPP routing, KV cache awareness, and disaggregated serving with NIXL GPU-to-GPU transfer. Based on llm-d v0.7 (CNCF Sandbox).</div>
-  <div class="card-stats">
-    <span class="stat stat-green">3 Flows</span>
-    <span class="stat stat-blue">KV Cache</span>
-    <span class="stat stat-purple">CNCF</span>
-  </div>
-</a>
-
-<a href="https://github.com/llmd/llmd" class="card" style="border-color:#3fb95044">
-  <div class="card-header">
-    <div class="card-icon" style="background:#3fb95022;border:1px solid #3fb95044">🚀</div>
-    <div>
-      <div class="card-title">Get Started with llmd</div>
-      <div class="card-subtitle">Open Source · MIT Licensed · Rust + Python</div>
-    </div>
-  </div>
-  <div class="card-desc">llmd is a lightweight, configurable daemon for orchestrating multi-model LLM inference pipelines. Deploy locally or at the edge with minimal dependencies. Production-ready with built-in observability.</div>
-  <div class="card-stats">
-    <span class="stat stat-green">Open Source</span>
-    <span class="stat stat-blue">5 Min Setup</span>
-    <span class="stat stat-purple">Docker Ready</span>
-  </div>
-</a>
-
 <footer>
-  <p>Built with ❤️ for edge-native AI infrastructure · <a href="https://github.com/llmd/llmd">GitHub</a> · <a href="https://llmd.ai/docs">Docs</a></p>
+  <p>Built with <a href="https://noyitz.github.io/flowstory/">FlowStory</a> · Inspired by <a href="https://noyitz.github.io/ai-gateway-docs/">AI Gateway Docs</a></p>
+  <p style="margin-top:8px">
+    <a href="https://llm-d.ai/">llm-d.ai</a> ·
+    <a href="https://github.com/llm-d/llm-d">GitHub</a> ·
+    <a href="https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/">CNCF</a>
+  </p>
 </footer>
 
 </div>
-
-<script>
-function showTemplate(templateId) {
-  const templates = {
-    'local-vllm': `[daemon]
-name = "llmd-local"
-listen = "0.0.0.0:8080"
-
-[[models]]
-name = "llama3-70b"
-provider = "vllm"
-endpoint = "http://localhost:8000/v1"
-timeout = 30`,
-
-    'ollama-multi': `[daemon]
-name = "llmd-ollama-lb"
-listen = "0.0.0.0:8080"
-
-[[models]]
-name = "llama3-8b"
-provider = "ollama"
-endpoint = "http://localhost:11434"
-weight = 3
-
-[[models]]
-name = "mistral-7b"
-provider = "ollama"
-endpoint = "http://localhost:11435"
-weight = 2
-
-[[models]]
-name = "phi-3"
-provider = "ollama"
-endpoint = "http://localhost:11436"
-weight = 1
-
-[routing]
-strategy = "weighted-round-robin"
-health_check_interval = "10s"`,
-
-    'hybrid-fallback': `[daemon]
-name = "llmd-hybrid"
-listen = "0.0.0.0:8080"
-
-[[models]]
-name = "llama3-70b-local"
-provider = "vllm"
-endpoint = "http://localhost:8000/v1"
-timeout = 5
-priority = 1
-
-[[models]]
-name = "gpt-4o-fallback"
-provider = "openai"
-endpoint = "https://api.openai.com/v1"
-api_key_env = "OPENAI_API_KEY"
-timeout = 10
-priority = 2
-
-[routing]
-strategy = "failover"
-cost_tracking = true`,
-
-    'spec-decode': `[daemon]
-name = "llmd-speculative"
-listen = "0.0.0.0:8080"
-
-[speculative_decoding]
-enabled = true
-draft_model = "llama3-8b"
-target_model = "llama3-70b"
-acceptance_threshold = 0.8
-
-[[models]]
-name = "llama3-8b"
-provider = "vllm"
-endpoint = "http://localhost:8000/v1"
-
-[[models]]
-name = "llama3-70b"
-provider = "vllm"
-endpoint = "http://localhost:8001/v1"`,
-
-    'multi-provider': `[daemon]
-name = "llmd-enterprise"
-listen = "0.0.0.0:8080"
-
-[[models]]
-name = "local-vllm"
-provider = "vllm"
-endpoint = "http://localhost:8000/v1"
-timeout = 3
-priority = 1
-
-[[models]]
-name = "anthropic-claude"
-provider = "anthropic"
-endpoint = "https://api.anthropic.com/v1"
-api_key_env = "ANTHROPIC_API_KEY"
-timeout = 10
-priority = 2
-
-[[models]]
-name = "openai-gpt4"
-provider = "openai"
-endpoint = "https://api.openai.com/v1"
-api_key_env = "OPENAI_API_KEY"
-timeout = 10
-priority = 3
-
-[[models]]
-name = "bedrock-claude"
-provider = "bedrock"
-region = "us-east-1"
-timeout = 15
-priority = 4
-
-[[models]]
-name = "vertex-gemini"
-provider = "vertex"
-project = "my-project"
-timeout = 15
-priority = 5
-
-[routing]
-strategy = "cascade-failover"
-retry_on_timeout = true`,
-
-    'edge-native': `[daemon]
-name = "llmd-edge"
-listen = "0.0.0.0:8080"
-
-[[edge_nodes]]
-name = "edge-us-west"
-endpoint = "http://edge1.internal:8000/v1"
-region = "us-west-2"
-latency_p99 = 25
-
-[[edge_nodes]]
-name = "edge-us-east"
-endpoint = "http://edge2.internal:8000/v1"
-region = "us-east-1"
-latency_p99 = 30
-
-[[edge_nodes]]
-name = "edge-eu-central"
-endpoint = "http://edge3.internal:8000/v1"
-region = "eu-central-1"
-latency_p99 = 40
-
-[[edge_nodes]]
-name = "edge-ap-south"
-endpoint = "http://edge4.internal:8000/v1"
-region = "ap-south-1"
-latency_p99 = 50
-
-[routing]
-strategy = "geo-proximity"
-max_latency_ms = 100
-health_check_interval = "5s"`
-  };
-
-  alert('Template: ' + templateId + '\n\n' + templates[templateId] + '\n\n(Full interactive template viewer coming soon)');
-}
-</script>
-
 </body>
 </html>
