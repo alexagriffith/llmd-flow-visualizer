@@ -232,21 +232,6 @@
             background: #7c3aed;
             color: white;
         }
-        #footer {
-            position: fixed;
-            bottom: 10px;
-            left: 20px;
-            font-size: 11px;
-            color: #666;
-            z-index: 100;
-        }
-        #footer a {
-            color: #a78bfa;
-            text-decoration: none;
-        }
-        #footer a:hover {
-            text-decoration: underline;
-        }
     </style>
 </head>
 <body>
@@ -305,11 +290,6 @@
         <div id="step-info">Step 0 of 0</div>
     </div>
 
-    <div id="footer">
-        Built with <a href="https://llm-d.ai/" target="_blank">llm-d.ai</a> and
-        <a href="https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/" target="_blank">CNCF</a> resources
-    </div>
-
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -333,7 +313,7 @@
             extproc: { x: 100, y: 320, w: 180, h: 70, label: 'Envoy ext-proc', type: 'plugin' },
             epp: { x: 400, y: 320, w: 160, h: 70, label: 'EPP\n(Endpoint Picker)', type: 'core' },
             kvindex: { x: 700, y: 250, w: 180, h: 80, label: 'KV Cache Index', type: 'storage' },
-            vllmPodA: { x: 400, y: 520, w: 160, h: 80, label: 'vLLM Pod A\n(High cache hit)', type: 'inference' },
+            vlmPodA: { x: 400, y: 520, w: 160, h: 80, label: 'vLLM Pod A\n(High cache hit)', type: 'inference' },
             vllmPodB: { x: 650, y: 520, w: 160, h: 80, label: 'vLLM Pod B\n(Least loaded)', type: 'inference' },
             kvstore: { x: 900, y: 520, w: 160, h: 80, label: 'KV Cache Store', type: 'storage' },
             prefillPool: { x: 400, y: 520, w: 180, h: 80, label: 'Prefill Pool\n(vLLM)', type: 'inference' },
@@ -354,9 +334,9 @@
                     { nodes: ['extproc', 'epp'], desc: 'EPP queries for routing', detail: 'External processing plugin invokes EPP', arrow: true },
                     { nodes: ['epp', 'kvindex'], desc: 'Check KV cache overlap', detail: 'Calculates prefix-cache-score per pod', arrow: true },
                     { nodes: ['kvindex'], desc: 'Returns cache hit rates', detail: 'Pod A: 85% hit, Pod B: 12% hit' },
-                    { nodes: ['epp', 'vllmPodA'], desc: 'Routes to Pod A (highest hit)', detail: 'Intelligent cache-aware routing', arrow: true },
-                    { nodes: ['vllmPodA'], desc: 'Serves with cached KV', detail: '85% of prefill skipped - fast TTFT' },
-                    { nodes: ['vllmPodA', 'response'], desc: 'Streaming response', detail: 'Low latency due to cache hit', arrow: true },
+                    { nodes: ['epp', 'vlmPodA'], desc: 'Routes to Pod A (highest hit)', detail: 'Intelligent cache-aware routing', arrow: true },
+                    { nodes: ['vlmPodA'], desc: 'Serves with cached KV', detail: '85% of prefill skipped - fast TTFT' },
+                    { nodes: ['vlmPodA', 'response'], desc: 'Streaming response', detail: 'Low latency due to cache hit', arrow: true },
                 ]
             },
             'cache-miss': {
