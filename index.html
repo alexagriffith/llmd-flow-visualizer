@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM-D — Distributed Inference for Kubernetes</title>
+<style>
+:root{--bg:#0a0a0f;--bg2:#161b22;--border:#21262d;--text:#e2e8f0;--dim:#8b949e;--accent:#58a6ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:900px;margin:0 auto;padding:48px 24px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+.brand-icon{width:28px;height:28px;background:linear-gradient(135deg,#58a6ff,#d2a8ff);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#0a0a0f;font-size:16px}
+.brand span{font-size:18px;font-weight:700}
+h1{font-size:36px;font-weight:800;letter-spacing:-1px;margin-bottom:8px}
+h1 .grad{background:linear-gradient(135deg,#58a6ff,#d2a8ff,#f0883e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.tagline{font-size:16px;color:var(--dim);margin-bottom:48px}
+.card{display:block;text-decoration:none;color:var(--text);background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:20px;transition:all .2s}
+.card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 32px rgba(88,166,255,.12)}
+.card-header{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.card-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.card-title{font-size:18px;font-weight:700}
+.card-subtitle{font-size:12px;color:var(--dim);margin-top:2px}
+.card-desc{font-size:14px;color:var(--dim);line-height:1.6;margin-bottom:14px}
+.card-stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid}
+.stat-blue{color:#58a6ff;border-color:#58a6ff44;background:#58a6ff11}
+.stat-green{color:#3fb950;border-color:#3fb95044;background:#3fb95011}
+.stat-orange{color:#f0883e;border-color:#f0883e44;background:#f0883e11}
+.stat-gold{color:#e3b341;border-color:#e3b34144;background:#e3b34111}
+.stat-red{color:#f85149;border-color:#f8514944;background:#f8514911}
+.stat-purple{color:#d2a8ff;border-color:#d2a8ff44;background:#d2a8ff11}
+footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);text-align:center;font-size:13px;color:#484f58}
+footer a{color:#484f58;text-decoration:none}
+footer a:hover{color:var(--accent)}
+.section{margin-bottom:32px;padding:24px;background:var(--bg2);border:1px solid var(--border);border-radius:14px}
+.section-title{font-size:20px;font-weight:700;margin-bottom:12px;color:var(--text)}
+.section-content{font-size:14px;color:var(--dim);line-height:1.7}
+.section-content ul{margin:12px 0;padding-left:24px}
+.section-content li{margin:6px 0}
+.code-block{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:16px;margin:16px 0;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:13px;color:#79c0ff;overflow-x:auto}
+.highlight{color:#f0883e;font-weight:600}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="brand"><div class="brand-icon">D</div><span>LLM-D</span></div>
+
+<h1>LLM-D<br><span class="grad">Flow Visualizers</span></h1>
+<p class="tagline">Interactive animated architecture flows for LLM-D distributed inference</p>
+
+<a href="llmd-architecture.html" class="card">
+  <div class="card-header">
+    <div class="card-icon" style="background:#58a6ff22;border:1px solid #58a6ff44">▶</div>
+    <div>
+      <div class="card-title">LLM-D — Full Architecture Flow</div>
+      <div class="card-subtitle">Disaggregated Serving + Multi-Node</div>
+    </div>
+  </div>
+  <div class="card-desc">Complete end-to-end flows: (1) Disaggregated serving with prefill/decode split, KV cache reuse via shared storage, and llm-d router for cache-aware routing. (2) Unified single-pod serving. (3) Multi-node tensor parallelism with LeaderWorkerSet, llm-d scheduler for GPU-topology-aware placement.</div>
+  <div class="card-stats">
+    <span class="stat stat-blue">3 Flows</span>
+    <span class="stat stat-purple">Clickable Components</span>
+    <span class="stat stat-orange">KServe + LWS</span>
+    <span class="stat stat-green">vLLM + Ray</span>
+  </div>
+</a>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon" style="background:#d2a8ff22;border:1px solid #d2a8ff44">⚡</div>
+    <div>
+      <div class="card-title">Disaggregated Serving Architecture</div>
+      <div class="card-subtitle">Prefill/Decode Separation + KV Cache Reuse</div>
+    </div>
+  </div>
+  <div class="card-desc">Separate prefill (compute-intensive, processes prompts) and decode (memory-intensive, generates tokens) pods. Prefill pods save KV cache to shared storage; decode pods load KV cache for follow-up requests in the same conversation. llm-d router handles cache-aware routing. Use cheaper GPUs (L4/T4) for decode, high-FLOPS GPUs (A100) for prefill.</div>
+  <div class="card-stats">
+    <span class="stat stat-purple">KV Cache Reuse</span>
+    <span class="stat stat-blue">Cost Optimization</span>
+    <span class="stat stat-orange">llm-d Router</span>
+    <span class="stat stat-green">vLLM Engine</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon" style="background:#e3b34122;border:1px solid #e3b34144">🎯</div>
+    <div>
+      <div class="card-title">llm-d Inference Scheduler</div>
+      <div class="card-subtitle">GPU Topology-Aware Pod Placement</div>
+    </div>
+  </div>
+  <div class="card-desc">CNCF Sandbox project providing intelligent scheduling for distributed LLM inference. GPU topology aware: considers NUMA, PCIe lanes, NVLink, network bandwidth. Decides optimal node placement for LeaderWorkerSet pods (leader + workers) to minimize cross-node communication latency for tensor/pipeline parallelism.</div>
+  <div class="card-stats">
+    <span class="stat stat-gold">CNCF Sandbox</span>
+    <span class="stat stat-blue">GPU Topology</span>
+    <span class="stat stat-purple">v0.7.1</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon" style="background:#8b949e22;border:1px solid #8b949e44">☸️</div>
+    <div>
+      <div class="card-title">LeaderWorkerSet (LWS) Integration</div>
+      <div class="card-subtitle">Kubernetes-Native Leader + Worker Pod Groups</div>
+    </div>
+  </div>
+  <div class="card-desc">Uses LeaderWorkerSet CRD (kubernetes-sigs) for distributed inference. One pod acts as leader (Ray head, vLLM coordinator), others as workers (Ray workers, model shards). LWS controller automatically injects LWS_LEADER_ADDRESS and LWS_WORKER_INDEX env vars for worker discovery. KServe translates LLMInferenceService CRD to LWS + Service + HTTPRoute.</div>
+  <div class="card-stats">
+    <span class="stat stat-blue">LWS CRD</span>
+    <span class="stat stat-green">kubernetes-sigs</span>
+    <span class="stat stat-purple">KServe v0.17</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-icon" style="background:#79c0ff22;border:1px solid #79c0ff44">📊</div>
+    <div>
+      <div class="card-title">llm-d Workload Variant Autoscaler</div>
+      <div class="card-subtitle">Queue-Based Scaling for Prefill + Decode</div>
+    </div>
+  </div>
+  <div class="card-desc">Monitors request queue length and latency. Scales LeaderWorkerSet replicas up/down based on demand. Handles disaggregated scaling: scales prefill and decode pods independently. Autoscales based on concurrency, queue depth, or request rate metrics. Version v0.6.0.</div>
+  <div class="card-stats">
+    <span class="stat stat-blue">Queue-Based</span>
+    <span class="stat stat-orange">Independent Scaling</span>
+    <span class="stat stat-purple">v0.6.0</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Why LLM-D?</div>
+  <div class="section-content">
+    <p><strong>The Problem:</strong> Serving large models (70B+) requires distributed inference across multiple GPUs or nodes. Traditional Kubernetes primitives don't fit:</p>
+    <ul>
+      <li><span class="highlight">Deployment/StatefulSet</span> — no leader/worker semantics, manual pod discovery</li>
+      <li><span class="highlight">Naive scheduling</span> — doesn't consider GPU topology (NVLink, PCIe, NUMA)</li>
+      <li><span class="highlight">Single-phase serving</span> — compute-bound prefill and memory-bound decode run on same GPU</li>
+    </ul>
+    <p style="margin-top:12px"><strong>The Solution:</strong> llm-d provides Kubernetes-native distributed inference with:</p>
+    <ul>
+      <li><span class="highlight">LeaderWorkerSet integration</span> — automatic leader/worker coordination via LWS CRD</li>
+      <li><span class="highlight">GPU-topology-aware scheduling</span> — places leader/worker pods to minimize cross-node latency</li>
+      <li><span class="highlight">Disaggregated serving (optional)</span> — separate prefill/decode pods with KV cache reuse</li>
+      <li><span class="highlight">KServe abstraction</span> — users declare LLMInferenceService, llm-d handles the orchestration</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Who Is LLM-D For?</div>
+  <div class="section-content">
+    <ul>
+      <li><span class="highlight">Platform engineers</span> building LLM serving infrastructure on Kubernetes</li>
+      <li><span class="highlight">AI infrastructure teams</span> running production inference at scale (1000+ req/s)</li>
+      <li><span class="highlight">Enterprises</span> moving from prototype to production LLM workloads</li>
+      <li><span class="highlight">ML platform teams</span> supporting multi-tenant LLM serving with LoRA adapters</li>
+      <li><span class="highlight">SREs</span> who need predictable latency, observability, and reliability for LLM endpoints</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Architecture Overview</div>
+  <div class="section-content">
+    <p><strong>Component Stack (RHAI on Kubernetes):</strong></p>
+    <ul>
+      <li><span class="highlight">User API:</span> LLMInferenceService CRD (KServe v0.17.0)</li>
+      <li><span class="highlight">Control Plane:</span> KServe llmisvc-controller translates to LeaderWorkerSet</li>
+      <li><span class="highlight">Orchestration:</span> llm-d Inference Scheduler (v0.7.1), llm-d Workload Variant Autoscaler (v0.6.0), LeaderWorkerSet Controller (kubernetes-sigs/lws)</li>
+      <li><span class="highlight">Service Mesh:</span> Istio + Gateway API (HTTPRoute)</li>
+      <li><span class="highlight">Runtime:</span> vLLM (v0.18.0) with Ray distributed backend</li>
+      <li><span class="highlight">Infrastructure:</span> Kubernetes, cert-manager, GPU device plugins</li>
+    </ul>
+    <p style="margin-top:12px"><strong>Request Flow (Unified):</strong> Client → Gateway → vLLM Leader Pod → (Ray) → Worker Pods → Aggregated Response</p>
+    <p style="margin-top:8px"><strong>Request Flow (Disaggregated):</strong> Client → Gateway → llm-d Router → Prefill Pod → KV Cache Storage → Decode Pod → Response</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Key Concepts</div>
+  <div class="section-content">
+    <p><strong>LeaderWorkerSet (LWS):</strong> Kubernetes-native CRD (kubernetes-sigs, not llm-d) for leader+worker pod groups. Leader runs Ray head + vLLM coordinator. Workers run Ray workers + model shards. LWS controller auto-injects LWS_LEADER_ADDRESS env var for discovery.</p>
+    <p style="margin-top:12px"><strong>Tensor Parallelism:</strong> Split model layers across multiple GPUs (within or across nodes). Each GPU computes its shard. Requires high-bandwidth interconnect (NVLink, RDMA). llm-d scheduler places pods to minimize cross-node latency.</p>
+    <p style="margin-top:12px"><strong>Disaggregated Serving:</strong> Optional. Separate prefill (compute-intensive, A100) and decode (memory-intensive, L4/T4) pods. Prefill saves KV cache to shared storage. Decode loads KV cache for follow-up requests. llm-d router handles cache-aware routing.</p>
+    <p style="margin-top:12px"><strong>KServe Abstraction:</strong> Users create LLMInferenceService CRD with parallelism params (tensor, pipeline, data, dataLocal). KServe llmisvc-controller calculates LWS size, selects hardware-specific config template (CUDA/ROCm/Gaudi), renders vLLM args, creates LWS + Service + HTTPRoute.</p>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Getting Started</div>
+  <div class="section-content">
+    <p><strong>Prerequisites:</strong> Kubernetes cluster with KServe + llm-d installed (part of RHAI/OpenDataHub).</p>
+    <p style="margin-top:12px"><strong>Example: Single-Node Inference (Llama-2-70b)</strong></p>
+    <div class="code-block">apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: llama-70b
+spec:
+  model:
+    uri: s3://models/llama-70b/
+    name: meta-llama/Llama-2-70b-chat-hf
+  parallelism:
+    tensor: 8        # 8-way tensor parallelism
+    data: 1          # Single replica
+    dataLocal: 8     # 8 GPUs on one node
+  baseRefs:
+    - name: v3-4-0-kserve-config-llm-template-nvidia-cuda
+  worker:
+    resources:
+      limits:
+        nvidia.com/gpu: "8"
+      requests:
+        memory: "400Gi"
+    nodeSelector:
+      node.kubernetes.io/instance-type: "p4d.24xlarge"</div>
+    <p>This creates: 1 pod with 8 GPUs. KServe translates to LeaderWorkerSet with size=1 (leader only, no workers).</p>
+    <p style="margin-top:12px"><strong>Send Inference Request:</strong></p>
+    <div class="code-block">curl https://gateway/v1/models/llama-70b/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama-70b","messages":[{"role":"user","content":"Hello"}]}'</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Production Benefits</div>
+  <div class="section-content">
+    <ul>
+      <li><span class="highlight">Better GPU utilization</span> — prefill and decode use different GPU profiles, disaggregation lets you right-size each</li>
+      <li><span class="highlight">Lower P99 latency</span> — KV cache-aware routing reduces cache evictions and recomputation</li>
+      <li><span class="highlight">Higher throughput</span> — decode pods can serve multiple requests in parallel without prefill compute overhead</li>
+      <li><span class="highlight">Predictable scaling</span> — add prefill or decode replicas independently based on bottleneck</li>
+      <li><span class="highlight">Multi-tenant support</span> — LoRA adapters share base model KV cache, scheduler routes by model affinity</li>
+      <li><span class="highlight">Kubernetes-native</span> — no external orchestrators, uses CRDs, integrates with Gateway API</li>
+    </ul>
+  </div>
+</div>
+
+<a href="https://github.com/llm-d" class="card" style="border-color:#3fb95044">
+  <div class="card-header">
+    <div class="card-icon" style="background:#3fb95022;border:1px solid #3fb95044">🔧</div>
+    <div>
+      <div class="card-title">Explore the Code</div>
+      <div class="card-subtitle">Open Source on GitHub</div>
+    </div>
+  </div>
+  <div class="card-desc">LLM-D is open source. Explore the scheduler, EPP filter, NIXL integration, and InferencePool CRD implementations. Contributions welcome.</div>
+  <div class="card-stats">
+    <span class="stat stat-green">Open Source</span>
+    <span class="stat stat-blue">Apache 2.0</span>
+    <span class="stat stat-purple">Production Ready</span>
+  </div>
+</a>
+
+<footer>
+  <p>LLM-D — Distributed Inference for Kubernetes</p>
+</footer>
+
+</div>
+</body>
+</html>

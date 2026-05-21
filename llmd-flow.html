@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM-D Architecture — Flow Visualizer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;overflow:hidden;transition:background .3s,color .3s}
+body.light{background:#fff;color:#24292f}
+
+/* Right Panel */
+.right-panel{position:fixed;top:0;right:0;width:380px;height:100vh;z-index:100;display:flex;flex-direction:column;background:#161b22;border-left:1px solid #30363d;overflow:hidden;transition:background .3s,border-color .3s}
+body.light .right-panel{background:#f6f8fa;border-color:#d0d7de}
+
+.flow-bar{padding:12px 16px;border-bottom:1px solid #30363d;flex-shrink:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+body.light .flow-bar{border-color:#d0d7de}
+.flow-bar select{flex:1;padding:7px 10px;border:1px solid #30363d;border-radius:6px;background:#0d1117;color:#c9d1d9;font-size:13px;font-family:inherit;cursor:pointer}
+body.light .flow-bar select{background:#fff;color:#24292f;border-color:#d0d7de}
+.flow-bar button{padding:7px 14px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s}
+body.light .flow-bar button{background:#f6f8fa;color:#24292f;border-color:#d0d7de}
+.flow-bar button:hover{border-color:#58a6ff}
+.flow-bar .start{border-color:#3fb950;color:#3fb950;min-width:90px}
+.flow-bar .rst{border-color:#f0883e;color:#f0883e}
+
+.steps-section{padding:10px 16px;border-bottom:1px solid #30363d;flex:2;overflow-y:auto}
+body.light .steps-section{border-color:#d0d7de}
+.steps-title{font-weight:700;margin-bottom:6px;font-size:14px}
+.step{margin:2px 0;color:#484f58;display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.4;cursor:pointer;padding:3px 4px;border-radius:4px;transition:all .2s}
+body.light .step{color:#b0b8c1}
+.step:hover{background:#58a6ff22;cursor:pointer;color:#58a6ff;transform:translateX(4px);border-left:2px solid #58a6ff;padding-left:6px}
+body.light .step:hover{background:#ddf4ff88;cursor:pointer;color:#0969da;transform:translateX(4px);border-left:2px solid #0969da;padding-left:6px}
+.step-mk{flex-shrink:0;width:16px;text-align:center;font-size:13px}
+.step.pending{color:#484f58}
+body.light .step.pending{color:#b0b8c1}
+.step.pending .step-mk::before{content:'\25CB'}
+.step.active{color:#58a6ff}
+.step.active .step-mk::before{content:'\25CF'}
+.step.done{color:#3fb950}
+.step.done .step-mk::before{content:'\2713'}
+.step .step-mk::before{content:'\25CB'}
+
+.insp-section{flex:3;overflow-y:auto;padding:10px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px}
+.insp-title{font-weight:700;font-size:14px;margin-bottom:6px;font-family:-apple-system,sans-serif;flex-shrink:0;padding:0 0 6px;border-bottom:1px solid #30363d}
+body.light .insp-title{border-color:#d0d7de}
+.insp-sec{margin:6px 0 2px;font-weight:600;color:#58a6ff;font-size:12px;font-family:-apple-system,sans-serif}
+.insp-line{margin:1px 0;padding:2px 6px;border-radius:3px;white-space:pre;line-height:1.6;transition:all .4s}
+.insp-line.add{background:#1a2e1a;color:#3fb950;border-left:3px solid #3fb950}
+body.light .insp-line.add{background:#dafbe1;color:#116329}
+.insp-line.del{background:#2d1517;color:#f85149;text-decoration:line-through;opacity:.7;border-left:3px solid #f85149}
+body.light .insp-line.del{background:#ffebe9;color:#82071e}
+.insp-line.keep{color:#8b949e;border-left:3px solid transparent}
+.insp-line.highlight{background:#1a2332;color:#58a6ff;border-left:3px solid #58a6ff;animation:pulse .8s}
+body.light .insp-line.highlight{background:#ddf4ff;color:#0969da}
+@keyframes pulse{0%{opacity:.3}50%{opacity:1}100%{opacity:1}}
+.insp-plugin{margin:8px 0 4px;padding:4px 8px;background:#d2a8ff22;border-radius:4px;color:#d2a8ff;font-weight:600;font-size:12px;font-family:-apple-system,sans-serif}
+body.light .insp-plugin{background:#8250df15;color:#8250df}
+
+/* Theme toggle */
+.theme-toggle{position:fixed;top:16px;right:396px;z-index:200;width:36px;height:36px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+body.light .theme-toggle{background:#f6f8fa;color:#24292f;border-color:#d0d7de}
+
+/* Branding */
+.brand{position:fixed;top:10px;left:16px;z-index:200;display:flex;align-items:center;gap:10px;pointer-events:none}
+.brand-icon{width:30px;height:30px;background:linear-gradient(135deg,#58a6ff,#d2a8ff);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#0a0a0f;font-size:16px}
+.brand span{font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.3px}
+body.light .brand span{color:#1a1a1a}
+
+/* Title */
+.viz-title{position:fixed;top:14px;left:0;right:380px;z-index:200;text-align:center;font-size:22px;font-weight:700;background:linear-gradient(135deg,#58a6ff,#d2a8ff,#f0883e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.5px;pointer-events:none}
+
+/* Legend */
+.legend{position:fixed;bottom:16px;left:16px;z-index:100;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:10px;font-size:13px;transition:all .3s}
+body.light .legend{background:#f6f8fa;border-color:#d0d7de}
+.legend-title{font-weight:600;margin-bottom:5px;font-size:14px}
+.legend-item{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+.legend-dot{width:11px;height:11px;border-radius:50%}
+
+/* Scrollbar */
+.steps-section::-webkit-scrollbar,.insp-section::-webkit-scrollbar{width:6px}
+.steps-section::-webkit-scrollbar-track,.insp-section::-webkit-scrollbar-track{background:transparent}
+.steps-section::-webkit-scrollbar-thumb,.insp-section::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-webkit-scrollbar-thumb{background:#d0d7de}
+</style>
+</head>
+<body>
+
+<div class="brand"><div class="brand-icon">D</div><span>LLM-D</span></div>
+<button class="theme-toggle" id="thm" onclick="toggleTheme()">☾</button>
+<div class="viz-title">LLM-D Architecture — Flow Visualizer</div>
+
+<div class="right-panel">
+  <div class="flow-bar">
+    <select id="flow-select">
+      <option value="disaggregated">Disaggregated (P/D Split)</option>
+      <option value="unified">Unified (Single Pod)</option>
+    </select>
+    <button class="start" onclick="run()">▶ Start</button>
+    <button onclick="stepOnce()" title="Step forward" style="border-color:#58a6ff;color:#58a6ff;min-width:36px">▮▶</button>
+    <button id="speed-btn" onclick="cycleSpeed()" style="min-width:36px">1x</button>
+    <button class="rst" onclick="doReset()">Reset</button>
+  </div>
+  <div class="steps-section" id="steps-section">
+    <div class="steps-title">Flow Steps <span style="font-weight:400;font-size:11px;color:#8b949e">· click to jump</span></div>
+    <div id="steps-ctr"></div>
+  </div>
+  <div class="insp-section" id="insp-section">
+    <div class="insp-title" id="insp-title" style="color:#58a6ff">Request</div>
+    <div id="insp-content"></div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-title">Legend</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Request</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>Response</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div>Prefill</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#79c0ff"></div>Decode</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div>KV Cache Transfer</div>
+  <div style="margin-top:10px;padding-top:8px;border-top:1px solid #30363d;font-size:11px;color:#484f58">LLM-D Distributed Inference</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H, isDark = true, animFrame = null, dots = [], activeNodes = new Set();
+let badges = {}, lines = [], running = false, glowing = new Set(), fading = {};
+let paused = false, runStepIndex = 0, stepTimer = null, playbackSpeed = 1;
+let inspHeaders = [], inspBody = [], inspCycle = [], inspStepLabel = '';
+let snapshots = [];
+
+const LW = 1200, LH = 900;
+let ox = 0, oy = 0, sc = 1;
+
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('thm').innerHTML = isDark ? '☾' : '☀';
+  draw();
+}
+
+// NODES
+const N = {
+  client: { x: 50, y: 100, w: 100, h: 50, label: 'Client', type: 'box' },
+
+  gateway: { x: 250, y: 80, w: 200, h: 80, label: 'Istio Gateway', color: '#58a6ff', fs: 18 },
+  epp: { x: 520, y: 80, w: 200, h: 80, label: 'EPP Filter', sublabel: 'Endpoint Picker', color: '#79c0ff', fs: 16 },
+
+  sidecar: { x: 400, y: 250, w: 140, h: 50, label: 'Sidecar', sublabel: 'Coordinator', color: '#8b949e', fs: 14 },
+
+  prefill: { x: 150, y: 400, w: 200, h: 80, label: 'vLLM Prefill', sublabel: 'Pod B', color: '#d2a8ff', fs: 16 },
+  decode: { x: 650, y: 400, w: 200, h: 80, label: 'vLLM Decode', sublabel: 'Pod A', color: '#79c0ff', fs: 16 },
+
+  nixl: { x: 400, y: 550, w: 180, h: 60, label: 'NIXL', sublabel: 'KV Transfer (RDMA)', color: '#8b949e', fs: 14 },
+
+  pool: { x: 120, y: 350, w: 760, h: 280, type: 'boundary', label: 'InferencePool' },
+};
+
+function C() {
+  return isDark
+    ? { bg:'#0d1117', box:'#161b22', boxA:'#1a2332', bdr:'#30363d', txt:'#c9d1d9', dim:'#8b949e', brt:'#fff' }
+    : { bg:'#fff', box:'#f6f8fa', boxA:'#ddf4ff', bdr:'#d0d7de', txt:'#24292f', dim:'#656d76', brt:'#000' };
+}
+
+function resize() {
+  const panelW = 380;
+  W = canvas.width = innerWidth - panelW;
+  H = canvas.height = innerHeight;
+  sc = Math.min(W / LW, H / LH) * 0.95;
+  ox = (W - LW * sc) / 2;
+  oy = (H - LH * sc) * 0.1;
+  draw();
+}
+addEventListener('resize', resize);
+
+function tx(x) { return ox + x * sc; }
+function ty(y) { return oy + y * sc; }
+function ts(s) { return s * sc; }
+
+function drawBox(key) {
+  const n = N[key], c = C();
+  if (!n || n.type === 'boundary') return;
+  const x = tx(n.x), y = ty(n.y), w = ts(n.w), h = ts(n.h);
+  const isA = activeNodes.has(key), hasBadge = badges[key] != null;
+  ctx.save();
+
+  let fadeA = 1;
+  if (fading[key]) {
+    const el = Date.now() - fading[key];
+    fadeA = Math.min(el / 500, 1);
+    if (el > 500) delete fading[key];
+  }
+
+  if (isA || hasBadge) {
+    ctx.shadowColor = n.color || '#58a6ff';
+    ctx.shadowBlur = ts(18) * fadeA;
+    ctx.globalAlpha = 0.3 + 0.7 * fadeA;
+  }
+
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, ts(8));
+  ctx.fillStyle = (isA || hasBadge) ? c.boxA : c.box;
+  ctx.fill();
+  ctx.strokeStyle = (isA || hasBadge) ? (n.color || '#58a6ff') : c.bdr;
+  ctx.lineWidth = ts((isA || hasBadge) ? 2.5 : 1.5);
+  ctx.stroke();
+
+  const fs = n.fs || 16;
+  ctx.fillStyle = c.txt;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (n.sublabel) {
+    ctx.font = `bold ${ts(fs)}px system-ui`;
+    ctx.fillText(n.label, x + w / 2, y + h / 2 - ts(8));
+    ctx.font = `${ts(Math.max(fs - 3, 11))}px system-ui`;
+    ctx.fillStyle = c.dim;
+    ctx.fillText(n.sublabel, x + w / 2, y + h / 2 + ts(8));
+  } else {
+    ctx.font = `bold ${ts(fs)}px system-ui`;
+    ctx.fillText(n.label, x + w / 2, y + h / 2);
+  }
+
+  if (hasBadge) {
+    const bList = Array.isArray(badges[key]) ? badges[key] : [badges[key]];
+    bList.forEach((bNum, idx) => {
+      const bx = x + ts(8) + idx * ts(22), by = y + ts(5), br = ts(9);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(bx + br, by + br, br, 0, Math.PI * 2);
+      ctx.fillStyle = n.color || '#58a6ff';
+      ctx.fill();
+      ctx.font = `bold ${ts(10)}px system-ui`;
+      ctx.fillStyle = isDark ? '#0d1117' : '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(bNum), bx + br, by + br);
+    });
+  }
+  ctx.restore();
+}
+
+function drawBounds() {
+  const c = C();
+  const p = N.pool;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(tx(p.x), ty(p.y), ts(p.w), ts(p.h), ts(10));
+  ctx.strokeStyle = c.bdr;
+  ctx.lineWidth = ts(2);
+  ctx.setLineDash([ts(6), ts(5)]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = `${ts(13)}px system-ui`;
+  ctx.fillStyle = c.dim;
+  ctx.textAlign = 'left';
+  ctx.fillText(p.label, tx(p.x + 12), ty(p.y + 18));
+  ctx.restore();
+}
+
+function edgePt(n, targetX, targetY) {
+  const cx_ = n.x + n.w / 2, cy_ = n.y + n.h / 2;
+  const dx = targetX - cx_, dy = targetY - cy_;
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return { x: cx_, y: cy_ };
+  const hw = n.w / 2, hh = n.h / 2;
+  let ex, ey;
+  if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
+    ex = cx_ + (dx > 0 ? hw : -hw);
+    ey = cy_ + dy * (hw / Math.abs(dx));
+  } else {
+    ey = cy_ + (dy > 0 ? hh : -hh);
+    ex = cx_ + dx * (hh / Math.abs(dy));
+  }
+  return { x: ex, y: ey };
+}
+
+function drawArrowLine(x1, y1, x2, y2, color, num, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha || 1;
+  ctx.beginPath();
+  ctx.moveTo(tx(x1), ty(y1));
+  ctx.lineTo(tx(x2), ty(y2));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = ts(2.5);
+  ctx.stroke();
+  const ang = Math.atan2(y2 - y1, x2 - x1), sz = ts(10);
+  ctx.beginPath();
+  ctx.moveTo(tx(x2), ty(y2));
+  ctx.lineTo(tx(x2) - sz * Math.cos(ang - 0.4), ty(y2) - sz * Math.sin(ang - 0.4));
+  ctx.lineTo(tx(x2) - sz * Math.cos(ang + 0.4), ty(y2) - sz * Math.sin(ang + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  if (num != null) {
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, r = ts(12);
+    ctx.beginPath();
+    ctx.arc(tx(mx), ty(my), r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.font = `bold ${ts(10)}px system-ui`;
+    ctx.fillStyle = isDark ? '#0d1117' : '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(num), tx(mx), ty(my));
+  }
+  ctx.restore();
+}
+
+function drawLines() {
+  lines.forEach(l => {
+    const fn = N[l.from], tn = N[l.to];
+    if (!fn || !tn) return;
+    let fp = edgePt(fn, tn.x + tn.w / 2, tn.y + tn.h / 2);
+    let tp = edgePt(tn, fn.x + fn.w / 2, fn.y + fn.h / 2);
+    drawArrowLine(fp.x, fp.y, tp.x, tp.y, l.color, l.num, 0.8);
+  });
+}
+
+class Dot {
+  constructor(fKey, tKey, color, speed, cb) {
+    this.color = color;
+    this.speed = speed || 0.012;
+    this.t = 0;
+    this.cb = cb;
+    this.alive = true;
+    const fn = N[fKey], tn = N[tKey];
+    this.fx = fn.x + fn.w / 2;
+    this.fy = fn.y + fn.h / 2;
+    this.tx = tn.x + tn.w / 2;
+    this.ty = tn.y + tn.h / 2;
+    const fp = edgePt(fn, this.tx, this.ty);
+    const tp = edgePt(tn, this.fx, this.fy);
+    this.fx = fp.x;
+    this.fy = fp.y;
+    this.tx = tp.x;
+    this.ty = tp.y;
+    const dx = this.tx - this.fx, dy = this.ty - this.fy;
+    this.len = Math.sqrt(dx * dx + dy * dy);
+    const pxPerFrame = 4;
+    this.speed = this.len > 0 ? (pxPerFrame / this.len) * (speed / 0.02) : speed;
+  }
+  update() {
+    this.t += this.speed;
+    if (this.t >= 1) { this.t = 1; this.alive = false; if (this.cb) this.cb(); }
+  }
+  draw() {
+    const t = this.t;
+    const x = this.fx + (this.tx - this.fx) * t;
+    const y = this.fy + (this.ty - this.fy) * t;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tx(this.fx), ty(this.fy));
+    ctx.lineTo(tx(x), ty(y));
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = ts(2);
+    ctx.globalAlpha = 0.3;
+    ctx.stroke();
+    const ang = Math.atan2(this.ty - this.fy, this.tx - this.fx);
+    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(tx(x), ty(y));
+    ctx.rotate(ang);
+    const pw = ts(13), ph = ts(7);
+    ctx.beginPath();
+    ctx.moveTo(pw / 2, 0);
+    ctx.lineTo(pw / 6, -ph / 2);
+    ctx.lineTo(-pw / 2, -ph / 2);
+    ctx.lineTo(-pw / 2, ph / 2);
+    ctx.lineTo(pw / 6, ph / 2);
+    ctx.closePath();
+    ctx.fillStyle = this.color;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = ts(16);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  drawBounds();
+  drawLines();
+  Object.keys(N).forEach(k => drawBox(k));
+  dots.forEach(d => { d.update(); d.draw(); });
+  dots = dots.filter(d => d.alive);
+}
+function animate() { draw(); animFrame = requestAnimationFrame(animate); }
+
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function initSteps() {
+  const ctr = document.getElementById('steps-ctr');
+  ctr.innerHTML = '';
+  flow.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'step pending';
+    d.id = 'step-' + i;
+    d.innerHTML = `<span class="step-mk"></span><span>${esc(s.t)}</span>`;
+    d.onclick = () => jumpToStep(i);
+    ctr.appendChild(d);
+  });
+}
+
+function setInspPhase(phase) {
+  const el = document.getElementById('insp-title');
+  if (phase === 'request') { el.textContent = 'Request'; el.style.color = '#58a6ff'; }
+  else if (phase === 'response') { el.textContent = 'Response'; el.style.color = '#3fb950'; }
+}
+
+function initInspector() {
+  setInspPhase('request');
+  inspHeaders = [
+    { v: 'POST /v1/chat/completions', s: 'keep', id: 'h-path' },
+    { v: 'Content-Type: application/json', s: 'keep', id: 'h-ct' },
+  ];
+  inspBody = [
+    { v: '"model": "llama-3.1-8b"', s: 'keep', id: 'b-model' },
+    { v: '"messages": [{"role":"user","content":"Hello"}]', s: 'keep', id: 'b-msgs' },
+  ];
+  inspCycle = [];
+  inspStepLabel = 'Initial Request';
+  renderInsp();
+}
+
+function renderInsp() {
+  const el = document.getElementById('insp-content');
+  let h = `<div class="insp-plugin">${esc(inspStepLabel)}</div>`;
+  h += '<div class="insp-sec">Headers:</div>';
+  inspHeaders.forEach(l => { h += `<div class="insp-line ${l.s}">${esc(l.v)}</div>`; });
+  h += '<div class="insp-sec">Body:</div>';
+  inspBody.forEach(l => { h += `<div class="insp-line ${l.s}">${esc(l.v)}</div>`; });
+  if (inspCycle.length) {
+    h += '<div class="insp-sec">Metadata:</div>';
+    inspCycle.forEach(l => { h += `<div class="insp-line ${l.s}">${esc(l.v)}</div>`; });
+  }
+  el.innerHTML = h;
+}
+
+function resetStyles() {
+  inspHeaders.forEach(l => { if (l.s !== 'del') l.s = 'keep'; });
+  inspBody.forEach(l => { if (l.s !== 'del') l.s = 'keep'; });
+  inspCycle.forEach(l => { if (l.s !== 'del') l.s = 'keep'; });
+}
+
+function inspStep(stepNum) {
+  resetStyles();
+  switch (stepNum) {
+    case 1:
+      inspStepLabel = '① Client → Gateway';
+      break;
+    case 2:
+      inspStepLabel = '② Gateway → EPP';
+      inspHeaders.find(l => l.id === 'h-path').s = 'highlight';
+      break;
+    case 3:
+      inspStepLabel = '③ EPP selects P/D pods';
+      inspCycle = [
+        { v: 'prefill_pod = "vllm-prefill-b"', s: 'add', id: 'c-prefill' },
+        { v: 'decode_pod = "vllm-decode-a"', s: 'add', id: 'c-decode' },
+      ];
+      break;
+    case 4:
+      inspStepLabel = '④ Gateway → Sidecar';
+      break;
+    case 5:
+      inspStepLabel = '⑤ Sidecar → Prefill Pod B';
+      break;
+    case 6:
+      inspStepLabel = '⑥ Prefill processing';
+      inspCycle.push({ v: 'kv_cache_size = "2.1GB"', s: 'add', id: 'c-kv' });
+      break;
+    case 7:
+      inspStepLabel = '⑦ Prefill → Sidecar (KV metadata)';
+      break;
+    case 8:
+      inspStepLabel = '⑧ Sidecar → Decode Pod A';
+      break;
+    case 9:
+      inspStepLabel = '⑨ Decode requests KV via NIXL';
+      break;
+    case 10:
+      inspStepLabel = '⑩ NIXL KV transfer (RDMA)';
+      break;
+    case 11:
+      inspStepLabel = '⑪ Decode generates tokens';
+      setInspPhase('response');
+      inspHeaders = [
+        { v: 'HTTP/1.1 200 OK', s: 'keep', id: 'r-status' },
+        { v: 'Content-Type: application/json', s: 'keep', id: 'r-ct' },
+      ];
+      inspBody = [
+        { v: '"object": "chat.completion"', s: 'keep', id: 'r-obj' },
+        { v: '"choices": [{"message":{"content":"Hello!"}}]', s: 'keep', id: 'r-ch' },
+      ];
+      inspCycle = [];
+      break;
+    case 12:
+      inspStepLabel = '⑫ Response → Gateway';
+      break;
+    case 13:
+      inspStepLabel = '⑬ Response → Client';
+      inspBody.find(l => l.id === 'r-ch').s = 'highlight';
+      break;
+  }
+  renderInsp();
+}
+
+let activeFlow = 'disaggregated';
+const flowDisaggregated = [
+  { t: '1. Client → Gateway', mode: 'arrow', f: 'client', to: 'gateway', c: '#58a6ff', num: 1 },
+  { t: '2. Gateway → EPP (ext_proc)', mode: 'arrow', f: 'gateway', to: 'epp', c: '#58a6ff', num: 2 },
+  { t: '3. EPP selects P/D pods', mode: 'lightup', target: 'epp', badge: 3 },
+  { t: '4. Gateway → Sidecar', mode: 'arrow', f: 'gateway', to: 'sidecar', c: '#58a6ff', num: 4 },
+  { t: '5. Sidecar → Prefill Pod B', mode: 'arrow', f: 'sidecar', to: 'prefill', c: '#58a6ff', num: 5 },
+  { t: '6. Prefill processing', mode: 'lightup', target: 'prefill', badge: 6 },
+  { t: '7. Prefill → Sidecar (KV metadata)', mode: 'arrow', f: 'prefill', to: 'sidecar', c: '#d2a8ff', num: 7 },
+  { t: '8. Sidecar → Decode Pod A', mode: 'arrow', f: 'sidecar', to: 'decode', c: '#58a6ff', num: 8 },
+  { t: '9. Decode requests KV via NIXL', mode: 'arrow', f: 'decode', to: 'nixl', c: '#8b949e', num: 9 },
+  { t: '10. NIXL KV transfer (RDMA)', mode: 'arrow', f: 'nixl', to: 'decode', c: '#8b949e', num: 10 },
+  { t: '11. Decode generates tokens', mode: 'lightup', target: 'decode', badge: 11 },
+  { t: '12. Response → Gateway', mode: 'arrow', f: 'decode', to: 'gateway', c: '#3fb950', num: 12 },
+  { t: '13. Response → Client', mode: 'arrow', f: 'gateway', to: 'client', c: '#3fb950', num: 13 },
+];
+
+const flowUnified = [
+  { t: '1. Client → Gateway', mode: 'arrow', f: 'client', to: 'gateway', c: '#58a6ff', num: 1 },
+  { t: '2. Gateway → vLLM Pod', mode: 'arrow', f: 'gateway', to: 'prefill', c: '#58a6ff', num: 2 },
+  { t: '3. Prefill + Decode processing', mode: 'lightup', target: 'prefill', badge: 3 },
+  { t: '4. Response → Gateway', mode: 'arrow', f: 'prefill', to: 'gateway', c: '#3fb950', num: 4 },
+  { t: '5. Response → Client', mode: 'arrow', f: 'gateway', to: 'client', c: '#3fb950', num: 5 },
+];
+
+const flowMap = { disaggregated: flowDisaggregated, unified: flowUnified };
+let flow = flowDisaggregated;
+
+function updatePlayBtn() {
+  const btn = document.querySelector('.start');
+  if (paused) btn.innerHTML = '▶ Resume';
+  else if (running) btn.innerHTML = '▮▮ Pause';
+  else btn.innerHTML = '▶ Start';
+}
+
+function cycleSpeed() {
+  const speeds = [0.5, 1, 2];
+  const idx = speeds.indexOf(playbackSpeed);
+  playbackSpeed = speeds[(idx + 1) % speeds.length];
+  document.getElementById('speed-btn').textContent = playbackSpeed + 'x';
+}
+
+function stepLine(s) {
+  return { from: s.f, to: s.to, color: s.c, num: s.num };
+}
+
+let stepOnceMode = false;
+
+function stepOnce() {
+  if (running && !paused) {
+    paused = true; running = false;
+    if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+    updatePlayBtn();
+    return;
+  }
+  if (runStepIndex === 0) initInspector();
+  if (runStepIndex >= flow.length) { doReset(); return; }
+  stepOnceMode = true;
+  running = true; paused = false;
+  if (!animFrame) animate();
+  execStep();
+}
+
+function run() {
+  if (paused) {
+    paused = false;
+    running = true;
+    updatePlayBtn();
+    if (!animFrame) animate();
+    stepTimer = setTimeout(execStep, 300 / playbackSpeed);
+    return;
+  }
+  if (running) {
+    paused = true;
+    running = false;
+    if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+    updatePlayBtn();
+    return;
+  }
+  doReset();
+  running = true;
+  paused = false;
+  runStepIndex = 0;
+  initInspector();
+  updatePlayBtn();
+  stepTimer = setTimeout(execStep, 300);
+  if (!animFrame) animate();
+}
+
+function execStep() {
+  if (!running || paused || runStepIndex >= flow.length) {
+    if (runStepIndex >= flow.length) { running = false; paused = false; updatePlayBtn(); }
+    return;
+  }
+  const si = runStepIndex;
+  const s = flow[si];
+  for (let j = 0; j < si; j++) {
+    const prev = document.getElementById('step-' + j);
+    if (prev) prev.className = 'step done';
+  }
+  const el = document.getElementById('step-' + si);
+  el.className = 'step active';
+  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  inspStep(si + 1);
+
+  if (s.mode === 'arrow') {
+    if (s.f) activeNodes.add(s.f);
+    dots.push(new Dot(s.f, s.to, s.c, 0.02 * playbackSpeed, () => {
+      lines.push(stepLine(s));
+      activeNodes.add(s.to);
+      el.className = 'step done';
+      saveSnapshot(si);
+      runStepIndex++;
+      if (stepOnceMode) {
+        stepOnceMode = false; paused = true; running = false; updatePlayBtn();
+      } else if (running && !paused) {
+        stepTimer = setTimeout(execStep, 300 / playbackSpeed);
+      }
+    }));
+  } else if (s.mode === 'lightup') {
+    fading[s.target] = Date.now();
+    activeNodes.add(s.target);
+    if (badges[s.target] != null) {
+      const existing = Array.isArray(badges[s.target]) ? badges[s.target] : [badges[s.target]];
+      existing.push(s.badge);
+      badges[s.target] = existing;
+    } else {
+      badges[s.target] = s.badge;
+    }
+    el.className = 'step done';
+    saveSnapshot(si);
+    runStepIndex++;
+    if (stepOnceMode) {
+      stepOnceMode = false; paused = true; running = false; updatePlayBtn();
+    } else if (running && !paused) {
+      stepTimer = setTimeout(execStep, 800 / playbackSpeed);
+    }
+  }
+}
+
+function saveSnapshot(stepIdx) {
+  snapshots[stepIdx] = {
+    activeNodes: new Set(activeNodes),
+    badges: JSON.parse(JSON.stringify(badges)),
+    lines: JSON.parse(JSON.stringify(lines)),
+  };
+}
+
+function restoreSnapshot(stepIdx) {
+  if (stepIdx < 0) {
+    activeNodes.clear(); badges = {}; lines = [];
+    return;
+  }
+  const snap = snapshots[stepIdx];
+  if (!snap) return;
+  activeNodes = new Set(snap.activeNodes);
+  badges = JSON.parse(JSON.stringify(snap.badges));
+  lines = JSON.parse(JSON.stringify(snap.lines));
+}
+
+function simulateUpTo(targetStep) {
+  activeNodes.clear(); badges = {}; lines = [];
+  for (let i = 0; i <= targetStep; i++) {
+    const s = flow[i];
+    if (s.mode === 'arrow') {
+      if (s.f) activeNodes.add(s.f);
+      lines.push(stepLine(s));
+      activeNodes.add(s.to);
+    } else if (s.mode === 'lightup') {
+      activeNodes.add(s.target);
+      if (badges[s.target] != null) {
+        const existing = Array.isArray(badges[s.target]) ? badges[s.target] : [badges[s.target]];
+        existing.push(s.badge);
+        badges[s.target] = existing;
+      } else {
+        badges[s.target] = s.badge;
+      }
+    }
+    saveSnapshot(i);
+  }
+}
+
+function jumpToStep(targetStep) {
+  if (running) {
+    running = false;
+    if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+  }
+  if (!snapshots[targetStep]) simulateUpTo(targetStep);
+  restoreSnapshot(targetStep);
+  runStepIndex = targetStep + 1;
+  document.querySelectorAll('.step').forEach((el, i) => {
+    if (i <= targetStep) el.className = 'step done';
+    else el.className = 'step pending';
+  });
+  const clickedEl = document.getElementById('step-' + targetStep);
+  if (clickedEl) clickedEl.className = 'step active';
+  initInspector();
+  for (let i = 1; i <= targetStep + 1; i++) inspStep(i);
+  dots = [];
+  fading = {};
+  paused = true;
+  updatePlayBtn();
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  requestAnimationFrame(() => { draw(); draw(); });
+}
+
+function doReset() {
+  running = false;
+  paused = false;
+  runStepIndex = 0;
+  if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+  dots = [];
+  activeNodes.clear();
+  badges = {};
+  lines = [];
+  fading = {};
+  snapshots = [];
+  initSteps();
+  updatePlayBtn();
+  document.getElementById('insp-content').innerHTML = '<div style="color:#8b949e;font-family:-apple-system,sans-serif;font-size:13px">Press Start to see the request flow</div>';
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  draw();
+}
+
+document.getElementById('flow-select').addEventListener('change', function() {
+  activeFlow = this.value;
+  flow = flowMap[activeFlow];
+  doReset();
+});
+
+resize();
+initSteps();
+draw();
+</script>
+</body>
+</html>

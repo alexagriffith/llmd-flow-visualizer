@@ -1,0 +1,25 @@
+{
+  "name": "llm-d-landing-page",
+  "version": "1.0.0",
+  "description": "LLM-D — Distributed Inference for Kubernetes",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "serve": "npx http-server -p 8080",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "llm",
+    "kubernetes",
+    "distributed-inference",
+    "vllm",
+    "prefill-decode",
+    "kv-cache"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/llm-d/llm-d-landing-page"
+  }
+}
