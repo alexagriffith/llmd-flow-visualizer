@@ -107,11 +107,12 @@ body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-we
 
 <div class="legend">
   <div class="legend-title">Legend</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Gateway / Core</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Inference</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Storage / Cache</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>EPP / Routing</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Transfer / Network</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Gateway</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div>Inference Pods</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#79c0ff"></div>EPP / Routing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div>Storage / Cache</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div>Transfer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>Response</div>
 </div>
 
 <div id="overlay" onclick="if(event.target===this)closeOverlay()">
@@ -129,7 +130,7 @@ body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-we
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-let W, H, sc = 1, ox = 0, oy = 50;
+let W, H, sc = 1, ox = 0, oy = 30;
 const LW = 1400, LH = 1000;
 
 let isDark = true;
@@ -145,31 +146,41 @@ const tx = x => x * sc + ox;
 const ty = y => y * sc + oy;
 const ts = s => s * sc;
 
-// Node definitions
+// Node definitions - grid-based layout with proper alignment
+// Grid: 280px left margin, components use 280px width + 40px gap
 const N = {
-  user: { x: 50, y: 80, w: 120, h: 60, label: 'Client / User', type: 'external', color: '#a78bfa' },
+  // External - left side
+  user: { x: 60, y: 150, w: 160, h: 70, label: 'Client / User', type: 'external', color: '#58a6ff' },
 
-  cluster: { x: 230, y: 60, w: 1100, h: 900, type: 'boundary', label: 'Kubernetes Cluster' },
+  // Cluster boundary
+  cluster: { x: 280, y: 60, w: 1050, h: 860, type: 'boundary', label: 'kubernetes cluster' },
 
-  gateway: { x: 280, y: 100, w: 220, h: 80, label: 'Gateway API', sublabel: '(Istio/Envoy)', color: '#a78bfa', fs: 18 },
-  extproc: { x: 280, y: 220, w: 220, h: 70, label: 'Envoy ext-proc', sublabel: '(gRPC hook)', color: '#a78bfa', fs: 16 },
+  // Top tier - Gateway (full width)
+  gateway: { x: 320, y: 100, w: 960, h: 100, label: 'Gateway API', sublabel: '(Istio/Envoy)', color: '#58a6ff', fs: 26 },
 
-  epp: { x: 600, y: 220, w: 200, h: 70, label: 'EPP', sublabel: '(Endpoint Picker)', color: '#10b981', fs: 18 },
-  kvindex: { x: 900, y: 180, w: 220, h: 80, label: 'KV Cache Index', sublabel: '(Block locality)', color: '#f59e0b', fs: 16 },
+  // Second tier - ext-proc and routing layer
+  extproc: { x: 320, y: 240, w: 450, h: 90, label: 'Envoy ext-proc', sublabel: '(gRPC hook)', color: '#d2a8ff', fs: 22 },
+  epp: { x: 810, y: 240, w: 220, h: 90, label: 'EPP', sublabel: '(Endpoint Picker)', color: '#79c0ff', fs: 24 },
+  kvindex: { x: 1070, y: 240, w: 210, h: 90, label: 'KV Cache Index', sublabel: '(Block tracker)', color: '#f0883e', fs: 20 },
 
-  poolBoundary: { x: 260, y: 360, w: 900, h: 280, type: 'boundary', label: 'InferencePool' },
+  // InferencePool boundary
+  poolBoundary: { x: 300, y: 380, w: 990, h: 200, type: 'boundary', label: 'InferencePool' },
 
-  vllmPodA: { x: 330, y: 450, w: 200, h: 90, label: 'vLLM Pod A', sublabel: 'Cache hit: 85%', color: '#06b6d4', fs: 16 },
-  vllmPodB: { x: 610, y: 450, w: 200, h: 90, label: 'vLLM Pod B', sublabel: 'Least loaded', color: '#06b6d4', fs: 16 },
-  vllmPodC: { x: 890, y: 450, w: 200, h: 90, label: 'vLLM Pod C', sublabel: 'Low cache hit', color: '#06b6d4', fs: 16 },
+  // Third tier - vLLM Pods (equal spacing within pool)
+  vllmPodA: { x: 330, y: 430, w: 280, h: 110, label: 'vLLM Pod A', sublabel: 'Cache hit: 85%', color: '#d2a8ff', fs: 20 },
+  vllmPodB: { x: 650, y: 430, w: 280, h: 110, label: 'vLLM Pod B', sublabel: 'Least loaded', color: '#d2a8ff', fs: 20 },
+  vllmPodC: { x: 970, y: 430, w: 280, h: 110, label: 'vLLM Pod C', sublabel: 'Low cache hit', color: '#d2a8ff', fs: 20 },
 
-  kvstore: { x: 900, y: 560, w: 220, h: 70, label: 'KV Cache Store', sublabel: '(Persistent)', color: '#f59e0b', fs: 15 },
+  // Fourth tier - KV Cache Store (aligned with right pods)
+  kvstore: { x: 970, y: 620, w: 280, h: 90, label: 'KV Cache Store', sublabel: '(Persistent)', color: '#f0883e', fs: 20 },
 
-  prefillPool: { x: 330, y: 720, w: 240, h: 90, label: 'Prefill Pool', sublabel: '(vLLM - TP=2)', color: '#06b6d4', fs: 16 },
-  nixl: { x: 640, y: 760, w: 180, h: 60, label: 'NIXL Transfer', sublabel: '(GPU-GPU RDMA)', color: '#6366f1', fs: 14 },
-  decodePool: { x: 900, y: 720, w: 240, h: 90, label: 'Decode Pool', sublabel: '(vLLM - TP=8)', color: '#06b6d4', fs: 16 },
+  // Fifth tier - Disaggregated serving (horizontal flow)
+  prefillPool: { x: 330, y: 760, w: 280, h: 110, label: 'Prefill Pool', sublabel: '(vLLM - TP=2)', color: '#d2a8ff', fs: 22 },
+  nixl: { x: 650, y: 780, w: 280, h: 70, label: 'NIXL Transfer', sublabel: '(GPU-GPU RDMA)', color: '#8b949e', fs: 18 },
+  decodePool: { x: 970, y: 760, w: 280, h: 110, label: 'Decode Pool', sublabel: '(vLLM - TP=8)', color: '#d2a8ff', fs: 22 },
 
-  response: { x: 50, y: 850, w: 120, h: 60, label: 'Response', sublabel: '(streaming)', type: 'external', color: '#3fb950' },
+  // Bottom - Response (centered)
+  response: { x: 650, y: 900, w: 280, h: 70, label: 'Response', sublabel: '(streaming)', type: 'external', color: '#3fb950' },
 };
 
 // Component descriptions with technical details
@@ -393,8 +404,9 @@ function drawNode(key, active, highlight) {
     ctx.setLineDash([]);
     if (n.label) {
       ctx.fillStyle = c.dim;
-      ctx.font = `${ts(12)}px sans-serif`;
-      ctx.fillText(n.label, tx(n.x + 10), ty(n.y + 20));
+      ctx.font = `${ts(14)}px sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.fillText(n.label, tx(n.x + 10), ty(n.y - 8));
     }
     return;
   }
@@ -474,9 +486,11 @@ function drawArrow(fromKey, toKey) {
     }
   }
 
-  ctx.strokeStyle = '#a78bfa';
-  ctx.fillStyle = '#a78bfa';
+  ctx.strokeStyle = isDark ? '#a78bfa' : '#8250df';
+  ctx.fillStyle = isDark ? '#a78bfa' : '#8250df';
   ctx.lineWidth = ts(3);
+  ctx.shadowBlur = ts(8);
+  ctx.shadowColor = isDark ? '#a78bfa44' : '#825' + '0df44';
 
   ctx.beginPath();
   ctx.moveTo(tx(x1), ty(y1));
