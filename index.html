@@ -1,723 +1,735 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>llm-d Request Flow Visualizer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0a0a0a;
-            color: #e0e0e0;
-            overflow: hidden;
-        }
-        #container {
-            display: flex;
-            height: 100vh;
-        }
-        #canvas-wrapper {
-            flex: 1;
-            position: relative;
-            overflow: auto;
-        }
-        canvas {
-            display: block;
-            background: #0a0a0a;
-        }
-        #controls {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(30, 30, 30, 0.95);
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #333;
-            z-index: 100;
-            backdrop-filter: blur(10px);
-        }
-        #controls h1 {
-            font-size: 20px;
-            margin-bottom: 15px;
-            color: #a78bfa;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        #controls h1 svg {
-            width: 24px;
-            height: 24px;
-        }
-        .flow-selector {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            margin-bottom: 20px;
-        }
-        .flow-btn {
-            padding: 10px 16px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 8px;
-            color: #e0e0e0;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: left;
-            font-size: 13px;
-        }
-        .flow-btn:hover {
-            background: #2a2a2a;
-            border-color: #555;
-        }
-        .flow-btn.active {
-            background: #7c3aed;
-            border-color: #7c3aed;
-            color: white;
-        }
-        .flow-btn strong {
-            display: block;
-            margin-bottom: 4px;
-        }
-        .playback-controls {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-        }
-        .control-btn {
-            padding: 8px 12px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            color: #e0e0e0;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-        }
-        .control-btn:hover {
-            background: #2a2a2a;
-        }
-        .control-btn.primary {
-            background: #7c3aed;
-            border-color: #7c3aed;
-            color: white;
-        }
-        .control-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-        #speed-control {
-            padding: 6px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            color: #e0e0e0;
-            font-size: 12px;
-        }
-        #step-info {
-            font-size: 12px;
-            color: #888;
-            margin-top: 10px;
-        }
-        #right-panel {
-            width: 350px;
-            background: rgba(20, 20, 20, 0.95);
-            border-left: 1px solid #333;
-            overflow-y: auto;
-            padding: 20px;
-        }
-        #right-panel h2 {
-            font-size: 16px;
-            margin-bottom: 15px;
-            color: #a78bfa;
-        }
-        .step-item {
-            padding: 12px;
-            margin-bottom: 8px;
-            background: #1a1a1a;
-            border-radius: 8px;
-            border-left: 3px solid #333;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .step-item:hover {
-            background: #2a2a2a;
-        }
-        .step-item.active {
-            border-left-color: #7c3aed;
-            background: #2a2a2a;
-        }
-        .step-item.completed {
-            opacity: 0.6;
-        }
-        .step-number {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            background: #333;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 24px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-        .step-item.active .step-number {
-            background: #7c3aed;
-            color: white;
-        }
-        .step-title {
-            font-size: 13px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        .step-detail {
-            font-size: 11px;
-            color: #888;
-        }
-        #theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 370px;
-            padding: 8px 12px;
-            background: rgba(30, 30, 30, 0.95);
-            border: 1px solid #333;
-            border-radius: 8px;
-            cursor: pointer;
-            z-index: 100;
-            color: #e0e0e0;
-            font-size: 12px;
-        }
-        body.light {
-            background: #f5f5f5;
-            color: #1a1a1a;
-        }
-        body.light canvas {
-            background: #f5f5f5;
-        }
-        body.light #controls,
-        body.light #theme-toggle {
-            background: rgba(255, 255, 255, 0.95);
-            border-color: #ddd;
-            color: #1a1a1a;
-        }
-        body.light #right-panel {
-            background: rgba(255, 255, 255, 0.95);
-            border-left-color: #ddd;
-        }
-        body.light .flow-btn,
-        body.light .control-btn,
-        body.light #speed-control,
-        body.light .step-item {
-            background: #fafafa;
-            border-color: #ddd;
-            color: #1a1a1a;
-        }
-        body.light .flow-btn:hover,
-        body.light .control-btn:hover,
-        body.light .step-item:hover {
-            background: #f0f0f0;
-        }
-        body.light .flow-btn.active {
-            background: #7c3aed;
-            color: white;
-        }
-        body.light .control-btn.primary {
-            background: #7c3aed;
-            color: white;
-        }
-        body.light .step-number {
-            background: #e0e0e0;
-        }
-        body.light .step-item.active .step-number {
-            background: #7c3aed;
-            color: white;
-        }
-        #footer {
-            position: fixed;
-            bottom: 10px;
-            left: 20px;
-            font-size: 11px;
-            color: #666;
-            z-index: 100;
-        }
-        #footer a {
-            color: #a78bfa;
-            text-decoration: none;
-        }
-        #footer a:hover {
-            text-decoration: underline;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>llm-d Request Flow Visualizer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;overflow:hidden;transition:background .3s,color .3s}
+body.light{background:#fff;color:#24292f}
+
+.right-panel{position:fixed;top:0;right:0;width:380px;height:100vh;z-index:100;display:flex;flex-direction:column;background:#161b22;border-left:1px solid #30363d;overflow:hidden;transition:background .3s,border-color .3s}
+body.light .right-panel{background:#f6f8fa;border-color:#d0d7de}
+
+.flow-bar{padding:12px 16px;border-bottom:1px solid #30363d;flex-shrink:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+body.light .flow-bar{border-color:#d0d7de}
+.flow-bar select{flex:1;padding:7px 10px;border:1px solid #30363d;border-radius:6px;background:#0d1117;color:#c9d1d9;font-size:13px;font-family:inherit;cursor:pointer}
+body.light .flow-bar select{background:#fff;color:#24292f;border-color:#d0d7de}
+.flow-bar button{padding:7px 14px;border:1px solid #30363d;border-radius:6px;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s}
+body.light .flow-bar button{background:#f6f8fa;color:#24292f;border-color:#d0d7de}
+.flow-bar button:hover{border-color:#a78bfa}
+.flow-bar .start{border-color:#a78bfa;color:#a78bfa;min-width:90px}
+.flow-bar .rst{border-color:#f0883e;color:#f0883e}
+
+.steps-section{padding:10px 16px;border-bottom:1px solid #30363d;flex:2;overflow-y:auto}
+body.light .steps-section{border-color:#d0d7de}
+.steps-title{font-weight:700;margin-bottom:6px;font-size:14px}
+.step{margin:2px 0;color:#484f58;display:flex;align-items:flex-start;gap:6px;font-size:12px;line-height:1.4;cursor:pointer;padding:3px 4px;border-radius:4px;transition:all .2s}
+body.light .step{color:#b0b8c1}
+.step:hover{background:#a78bfa22;cursor:pointer;color:#a78bfa;transform:translateX(4px);border-left:2px solid #a78bfa;padding-left:6px}
+body.light .step:hover{background:#e5dbff88;cursor:pointer;color:#8250df;transform:translateX(4px);border-left:2px solid #8250df;padding-left:6px}
+.step-mk{flex-shrink:0;width:16px;text-align:center;font-size:13px}
+.step.pending{color:#484f58}
+body.light .step.pending{color:#b0b8c1}
+.step.pending .step-mk::before{content:'\25CB'}
+.step.active{color:#a78bfa}
+.step.active .step-mk::before{content:'\25CF'}
+.step.done{color:#3fb950}
+.step.done .step-mk::before{content:'\2713'}
+
+.insp-section{flex:3;overflow-y:auto;padding:10px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px}
+.insp-title{font-weight:700;font-size:14px;margin-bottom:6px;font-family:-apple-system,sans-serif}
+.insp-sec{margin:6px 0 2px;font-weight:600;color:#a78bfa;font-size:12px;font-family:-apple-system,sans-serif}
+.insp-line{margin:1px 0;padding:2px 6px;border-radius:3px;white-space:pre;line-height:1.6}
+
+.theme-toggle{position:fixed;top:16px;right:396px;z-index:200;width:36px;height:36px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+body.light .theme-toggle{background:#f6f8fa;color:#24292f;border-color:#d0d7de}
+
+.viz-title{position:fixed;top:14px;left:0;right:380px;z-index:200;text-align:center;font-size:22px;font-weight:700;background:linear-gradient(135deg,#a78bfa,#06b6d4,#f0883e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-0.5px;pointer-events:none}
+
+.legend{position:fixed;bottom:16px;left:16px;z-index:100;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:10px;font-size:13px;transition:all .3s}
+body.light .legend{background:#f6f8fa;border-color:#d0d7de}
+.legend-title{font-weight:600;margin-bottom:5px;font-size:14px}
+.legend-item{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+.legend-dot{width:11px;height:11px;border-radius:50%}
+
+#overlay{display:none;position:fixed;top:0;left:0;right:380px;bottom:0;z-index:300;background:rgba(0,0,0,0.7)}
+#overlay-card{position:absolute;width:420px;background:#161b22;border:2px solid #30363d;border-radius:12px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+body.light #overlay-card{background:#f6f8fa;border-color:#d0d7de}
+#overlay-accent{height:4px;margin:-20px -20px 12px;border-radius:10px 10px 0 0}
+#overlay-title{font-size:18px;font-weight:700;margin-bottom:8px}
+#overlay-desc{font-size:14px;color:#8b949e;margin-bottom:16px;line-height:1.5}
+#overlay-details{font-size:13px}
+#overlay-close{position:absolute;top:16px;right:16px;width:24px;height:24px;border:none;background:transparent;color:#8b949e;font-size:20px;cursor:pointer;line-height:1}
+#overlay-resume{margin-top:16px;padding:8px 16px;background:#3fb950;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px}
+#overlay-resume:hover{background:#2da44e}
+#highlight-box{display:none;position:absolute;pointer-events:none;z-index:250;border-radius:8px}
+
+.steps-section::-webkit-scrollbar,.insp-section::-webkit-scrollbar{width:6px}
+.steps-section::-webkit-scrollbar-track,.insp-section::-webkit-scrollbar-track{background:transparent}
+.steps-section::-webkit-scrollbar-thumb,.insp-section::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-webkit-scrollbar-thumb{background:#d0d7de}
+</style>
 </head>
 <body>
-    <button id="theme-toggle">Toggle Theme</button>
+<div class="theme-toggle" id="thm" onclick="toggleTheme()">☾</div>
+<div class="viz-title">llm-d Request Flow Visualizer</div>
 
-    <div id="container">
-        <div id="canvas-wrapper">
-            <canvas id="canvas"></canvas>
-        </div>
+<canvas id="canvas"></canvas>
 
-        <div id="right-panel">
-            <h2>Flow Steps</h2>
-            <div id="steps-list"></div>
-        </div>
-    </div>
+<div class="right-panel">
+  <div class="flow-bar">
+    <select id="flowSel" onchange="changeFlow()">
+      <option value="cache-hit">Cache Hit Flow (Fast Path)</option>
+      <option value="cache-miss">Cache Miss Flow (Cold Start)</option>
+      <option value="disaggregated">Disaggregated Serving (P/D Split)</option>
+    </select>
+    <button class="start" id="playBtn" onclick="togglePlay()">▶ Play</button>
+    <button class="rst" onclick="reset()">Reset</button>
+    <select id="speedSel" style="width:70px" onchange="changeSpeed()">
+      <option value="2">0.5x</option>
+      <option value="1" selected>1x</option>
+      <option value="0.5">2x</option>
+    </select>
+  </div>
 
-    <div id="controls">
-        <h1>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-            llm-d Flow Visualizer
-        </h1>
+  <div class="steps-section">
+    <div class="steps-title">Flow Steps <span style="color:#8b949e;font-weight:400;font-size:12px">· click to jump</span></div>
+    <div id="stepsList"></div>
+  </div>
 
-        <div class="flow-selector">
-            <button class="flow-btn active" data-flow="cache-hit">
-                <strong>Cache Hit Flow</strong>
-                <span>High prefix overlap → fast path</span>
-            </button>
-            <button class="flow-btn" data-flow="cache-miss">
-                <strong>Cache Miss Flow</strong>
-                <span>New prompt → full prefill</span>
-            </button>
-            <button class="flow-btn" data-flow="disaggregated">
-                <strong>Disaggregated Serving</strong>
-                <span>P/D split with NIXL transfer</span>
-            </button>
-        </div>
+  <div class="insp-section">
+    <div class="insp-title">Request / Response</div>
+    <div id="inspector"></div>
+  </div>
+</div>
 
-        <div class="playback-controls">
-            <button class="control-btn primary" id="play-btn">Play</button>
-            <button class="control-btn" id="reset-btn">Reset</button>
-            <button class="control-btn" id="prev-btn">◄</button>
-            <button class="control-btn" id="next-btn">►</button>
-        </div>
+<div class="legend">
+  <div class="legend-title">Legend</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Gateway / Core</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Inference</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Storage / Cache</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>EPP / Routing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#6366f1"></div>Transfer / Network</div>
+</div>
 
-        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
-            <label style="font-size: 12px;">Speed:</label>
-            <select id="speed-control">
-                <option value="2000">0.5x</option>
-                <option value="1000" selected>1x</option>
-                <option value="500">2x</option>
-            </select>
-        </div>
+<div id="overlay" onclick="if(event.target===this)closeOverlay()">
+  <div id="overlay-card">
+    <div id="overlay-accent"></div>
+    <button id="overlay-close" onclick="closeOverlay()">×</button>
+    <div id="overlay-title"></div>
+    <div id="overlay-desc"></div>
+    <div id="overlay-details"></div>
+    <button id="overlay-resume" onclick="closeOverlay()" style="display:none">▶ Resume Flow</button>
+  </div>
+</div>
+<div id="highlight-box"></div>
 
-        <div id="step-info">Step 0 of 0</div>
-    </div>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H, sc = 1, ox = 0, oy = 50;
+const LW = 1400, LH = 1000;
 
-    <div id="footer">
-        Built with <a href="https://llm-d.ai/" target="_blank">llm-d.ai</a> and
-        <a href="https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/" target="_blank">CNCF</a> resources
-    </div>
+let isDark = true;
+let currentFlow = 'cache-hit';
+let stepIdx = 0;
+let running = false, paused = false;
+let playbackSpeed = 1;
+let stepTimer = null;
+let highlightKey = null;
 
-    <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const stepsList = document.getElementById('steps-list');
+// Transform helpers
+const tx = x => x * sc + ox;
+const ty = y => y * sc + oy;
+const ts = s => s * sc;
 
-        // Set canvas size
-        canvas.width = 1400;
-        canvas.height = 950;
+// Node definitions
+const N = {
+  user: { x: 50, y: 80, w: 120, h: 60, label: 'Client / User', type: 'external', color: '#a78bfa' },
 
-        let currentFlow = 'cache-hit';
-        let currentStep = 0;
-        let isPlaying = false;
-        let playbackSpeed = 1000;
-        let playTimer = null;
-        let isDark = true;
+  cluster: { x: 230, y: 60, w: 1100, h: 900, type: 'boundary', label: 'Kubernetes Cluster' },
 
-        // Node definitions with better layout (center flow at x=600)
-        const N = {
-            // Common nodes (all flows)
-            client: { x: 600, y: 50, w: 140, h: 60, label: 'User/Client', type: 'external' },
-            gateway: { x: 600, y: 160, w: 200, h: 80, label: 'Gateway API\n(Istio/Envoy)', type: 'gateway' },
-            extproc: { x: 600, y: 290, w: 200, h: 70, label: 'Envoy ext-proc', type: 'plugin' },
-            epp: { x: 600, y: 410, w: 180, h: 70, label: 'EPP\n(Endpoint Picker)', type: 'core' },
+  gateway: { x: 280, y: 100, w: 220, h: 80, label: 'Gateway API', sublabel: '(Istio/Envoy)', color: '#a78bfa', fs: 18 },
+  extproc: { x: 280, y: 220, w: 220, h: 70, label: 'Envoy ext-proc', sublabel: '(gRPC hook)', color: '#a78bfa', fs: 16 },
 
-            // Cache-aware nodes (shared by cache-hit and cache-miss)
-            kvindex: { x: 850, y: 410, w: 200, h: 70, label: 'KV Cache Index', type: 'storage' },
+  epp: { x: 600, y: 220, w: 200, h: 70, label: 'EPP', sublabel: '(Endpoint Picker)', color: '#10b981', fs: 18 },
+  kvindex: { x: 900, y: 180, w: 220, h: 80, label: 'KV Cache Index', sublabel: '(Block locality)', color: '#f59e0b', fs: 16 },
 
-            // Cache hit flow - Pod A on left
-            vllmPodA: { x: 450, y: 540, w: 180, h: 80, label: 'vLLM Pod A\n(High cache hit)', type: 'inference' },
+  poolBoundary: { x: 260, y: 360, w: 900, h: 280, type: 'boundary', label: 'InferencePool' },
 
-            // Cache miss flow - Pod B on right with KV store
-            vllmPodB: { x: 750, y: 540, w: 180, h: 80, label: 'vLLM Pod B\n(Least loaded)', type: 'inference' },
-            kvstore: { x: 950, y: 640, w: 180, h: 70, label: 'KV Cache Store', type: 'storage' },
+  vllmPodA: { x: 330, y: 450, w: 200, h: 90, label: 'vLLM Pod A', sublabel: 'Cache hit: 85%', color: '#06b6d4', fs: 16 },
+  vllmPodB: { x: 610, y: 450, w: 200, h: 90, label: 'vLLM Pod B', sublabel: 'Least loaded', color: '#06b6d4', fs: 16 },
+  vllmPodC: { x: 890, y: 450, w: 200, h: 90, label: 'vLLM Pod C', sublabel: 'Low cache hit', color: '#06b6d4', fs: 16 },
 
-            // Disaggregated flow - horizontal layout
-            prefillPool: { x: 350, y: 540, w: 200, h: 80, label: 'Prefill Pool\n(vLLM)', type: 'inference' },
-            nixl: { x: 600, y: 670, w: 160, h: 60, label: 'NIXL Transfer\n(GPU-to-GPU)', type: 'network' },
-            decodePool: { x: 850, y: 540, w: 200, h: 80, label: 'Decode Pool\n(vLLM)', type: 'inference' },
+  kvstore: { x: 900, y: 560, w: 220, h: 70, label: 'KV Cache Store', sublabel: '(Persistent)', color: '#f59e0b', fs: 15 },
 
-            // Response (all flows)
-            response: { x: 600, y: 800, w: 140, h: 60, label: 'Response', type: 'external' },
-        };
+  prefillPool: { x: 330, y: 720, w: 240, h: 90, label: 'Prefill Pool', sublabel: '(vLLM - TP=2)', color: '#06b6d4', fs: 16 },
+  nixl: { x: 640, y: 760, w: 180, h: 60, label: 'NIXL Transfer', sublabel: '(GPU-GPU RDMA)', color: '#6366f1', fs: 14 },
+  decodePool: { x: 900, y: 720, w: 240, h: 90, label: 'Decode Pool', sublabel: '(vLLM - TP=8)', color: '#06b6d4', fs: 16 },
 
-        // Flow definitions
-        const flows = {
-            'cache-hit': {
-                name: 'Cache Hit Flow (Fast Path)',
-                description: 'Request with high prefix cache overlap - routed to pod with cached KV',
-                steps: [
-                    { nodes: ['client'], desc: 'User sends inference request', detail: 'POST /v1/completions with prompt' },
-                    { nodes: ['client', 'gateway'], desc: 'Gateway receives request', detail: 'HTTP/2 ingress with TLS termination', arrow: true },
-                    { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc hook', detail: 'gRPC call for routing decision', arrow: true },
-                    { nodes: ['extproc', 'epp'], desc: 'EPP queries for routing', detail: 'External processing plugin invokes EPP', arrow: true },
-                    { nodes: ['epp', 'kvindex'], desc: 'Check KV cache overlap', detail: 'Calculates prefix-cache-score per pod', arrow: true },
-                    { nodes: ['kvindex'], desc: 'Returns cache hit rates', detail: 'Pod A: 85% hit, Pod B: 12% hit' },
-                    { nodes: ['epp', 'vllmPodA'], desc: 'Routes to Pod A (highest hit)', detail: 'Intelligent cache-aware routing', arrow: true },
-                    { nodes: ['vllmPodA'], desc: 'Serves with cached KV', detail: '85% of prefill skipped - fast TTFT' },
-                    { nodes: ['vllmPodA', 'response'], desc: 'Streaming response', detail: 'Low latency due to cache hit', arrow: true },
-                ]
-            },
-            'cache-miss': {
-                name: 'Cache Miss Flow (Cold Start)',
-                description: 'New prompt with no cache overlap - full prefill required',
-                steps: [
-                    { nodes: ['client'], desc: 'User sends new prompt', detail: 'POST /v1/completions with novel content' },
-                    { nodes: ['client', 'gateway'], desc: 'Gateway receives request', detail: 'HTTP/2 ingress with TLS termination', arrow: true },
-                    { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc hook', detail: 'gRPC call for routing decision', arrow: true },
-                    { nodes: ['extproc', 'epp'], desc: 'EPP queries for routing', detail: 'External processing plugin invokes EPP', arrow: true },
-                    { nodes: ['epp', 'kvindex'], desc: 'Check KV cache overlap', detail: 'Calculates prefix-cache-score per pod', arrow: true },
-                    { nodes: ['kvindex'], desc: 'Returns low hit rates', detail: 'Pod A: 5%, Pod B: 3%, Pod C: 2%' },
-                    { nodes: ['epp', 'vllmPodB'], desc: 'Routes to least-loaded pod', detail: 'Fallback to queue depth strategy', arrow: true },
-                    { nodes: ['vllmPodB'], desc: 'Full prefill required', detail: 'No cached KV - compute entire context' },
-                    { nodes: ['vllmPodB', 'kvstore'], desc: 'Caches new prefix', detail: 'Stores KV for future requests', arrow: true },
-                    { nodes: ['vllmPodB', 'response'], desc: 'Streaming response', detail: 'Higher TTFT due to full prefill', arrow: true },
-                ]
-            },
-            'disaggregated': {
-                name: 'Disaggregated Serving (P/D Split)',
-                description: 'Static pool configuration with separate prefill and decode phases',
-                steps: [
-                    { nodes: ['client'], desc: 'User sends request', detail: 'Long prompt requiring disaggregation' },
-                    { nodes: ['client', 'gateway'], desc: 'Gateway routes to prefill', detail: 'EPP determines prefill vs decode', arrow: true },
-                    { nodes: ['gateway', 'prefillPool'], desc: 'Prefill pool receives request', detail: 'Smaller TP, compute-optimized', arrow: true },
-                    { nodes: ['prefillPool'], desc: 'Computes KV cache', detail: 'Prefill phase generates KV tensors' },
-                    { nodes: ['prefillPool', 'nixl'], desc: 'Initiates KV transfer', detail: 'GPU-to-GPU RDMA via NIXL', arrow: true },
-                    { nodes: ['nixl', 'decodePool'], desc: 'KV transferred to decode', detail: 'InfiniBand/RoCE wire-speed transfer', arrow: true },
-                    { nodes: ['decodePool'], desc: 'Autoregressive decode', detail: 'Larger TP, memory-optimized' },
-                    { nodes: ['decodePool', 'response'], desc: 'Streaming tokens', detail: 'Optimized throughput from P/D split', arrow: true },
-                ]
-            }
-        };
+  response: { x: 50, y: 850, w: 120, h: 60, label: 'Response', sublabel: '(streaming)', type: 'external', color: '#3fb950' },
+};
 
-        // Colors
-        const colors = {
-            dark: {
-                bg: '#0a0a0a',
-                text: '#e0e0e0',
-                external: '#3b82f6',
-                gateway: '#8b5cf6',
-                plugin: '#ec4899',
-                core: '#10b981',
-                storage: '#f59e0b',
-                inference: '#06b6d4',
-                network: '#6366f1',
-                arrow: '#7c3aed',
-                inactive: '#333',
-            },
-            light: {
-                bg: '#f5f5f5',
-                text: '#1a1a1a',
-                external: '#2563eb',
-                gateway: '#7c3aed',
-                plugin: '#db2777',
-                core: '#059669',
-                storage: '#d97706',
-                inference: '#0891b2',
-                network: '#4f46e5',
-                arrow: '#7c3aed',
-                inactive: '#d0d0d0',
-            }
-        };
+// Component descriptions with technical details
+const tips = {
+  gateway: {
+    t: 'Gateway API (Istio/Envoy)',
+    d: 'Kubernetes Gateway API implementation using Envoy proxy. Entry point for all inference requests with support for ext-proc filters.',
+    dt: [
+      ['Standard', 'Kubernetes Gateway API (v1+)'],
+      ['Implementation', 'Istio, GKE Gateway, or Agentgateway'],
+      ['Protocol', 'HTTP/1.1, HTTP/2, gRPC'],
+      ['TLS', 'Termination at gateway layer']
+    ],
+    links: [
+      ['Gateway API Docs', 'https://gateway-api.sigs.k8s.io/'],
+      ['llm-d Gateway Guide', 'https://deepwiki.com/llm-d/llm-d/2.3-inference-gateway-and-routing']
+    ]
+  },
+  extproc: {
+    t: 'Envoy ext-proc (External Processing)',
+    d: 'Envoy filter that calls the EPP via gRPC for intelligent routing decisions before forwarding requests to backend vLLM pods.',
+    dt: [
+      ['Protocol', 'gRPC bidirectional stream'],
+      ['Function', 'Pre-request routing hook'],
+      ['Called By', 'Envoy when HTTPRoute → InferencePool'],
+      ['Enables', 'KV-cache aware routing, predicted latency']
+    ],
+    links: [
+      ['Envoy ext-proc', 'https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter'],
+      ['llm-d Integration', 'https://deepwiki.com/llm-d/llm-d-inference-scheduler/11.2-istio-and-kgateway-integration']
+    ]
+  },
+  epp: {
+    t: 'EPP (Endpoint Picker)',
+    d: 'Core routing engine that evaluates InferencePool pods using configurable scorers (prefix cache, queue depth, predicted latency, KV utilization).',
+    dt: [
+      ['Scheduling', 'Filter → Score → Select'],
+      ['Scorers', 'Prefix cache (3), KV util (2), Queue (2)'],
+      ['Response Time', 'Sub-millisecond for cached prompts'],
+      ['Saturation', 'Flow control with priority bands']
+    ],
+    links: [
+      ['EPP Architecture', 'https://github.com/llm-d/llm-d-router'],
+      ['Scoring Algorithms', 'https://developers.redhat.com/articles/2025/10/07/master-kv-cache-aware-routing-llm-d-efficient-ai-inference']
+    ]
+  },
+  kvindex: {
+    t: 'KV Cache Index',
+    d: 'Real-time index tracking KV cache block residency across pods. Uses chained FNV-64a hashing over CBOR for deterministic block keys.',
+    dt: [
+      ['Event Source', 'ZMQ from vLLM pods'],
+      ['Block Hash', 'FNV-64a chained over tokens'],
+      ['Lookup', 'requestKey → [PodEntry{pod, tier}]'],
+      ['Memory', '~339 KB for 365 GB VRAM (1M:1 ratio)']
+    ],
+    links: [
+      ['KV Cache Architecture', 'https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md'],
+      ['Block Hashing', 'https://llm-d.ai/blog/kvcache-wins-you-can-see']
+    ]
+  },
+  vllmPodA: {
+    t: 'vLLM Pod A (High Cache Hit)',
+    d: 'vLLM inference server with 85% prefix cache overlap for this request. EPP routes here for fast TTFT.',
+    dt: [
+      ['Engine', 'vLLM with prefix caching enabled'],
+      ['Cache Hit', '85% (85% of prefill skipped)'],
+      ['TTFT', '~340ms (88% faster than cold start)'],
+      ['GPU Memory', '~90% utilization']
+    ],
+    links: [
+      ['vLLM Docs', 'https://docs.vllm.ai/'],
+      ['Prefix Caching', 'https://docs.vllm.ai/en/latest/features/prefix_caching.html']
+    ]
+  },
+  vllmPodB: {
+    t: 'vLLM Pod B (Least Loaded)',
+    d: 'vLLM pod with lowest queue depth. Selected when cache affinity is low across all pods (fallback routing).',
+    dt: [
+      ['Selection Reason', 'Lowest queue depth'],
+      ['Cache Hit', '3% (minimal overlap)'],
+      ['Prefill', 'Full context computation required'],
+      ['Queue Depth', '0-2 requests']
+    ],
+    links: [
+      ['vLLM Docs', 'https://docs.vllm.ai/'],
+      ['Queue Scorer', 'https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/config-text/']
+    ]
+  },
+  kvstore: {
+    t: 'KV Cache Store',
+    d: 'Stores newly computed KV cache blocks for future requests with similar prefixes. Publishes BlockStored events to KV Cache Index via ZMQ.',
+    dt: [
+      ['Event Type', 'BlockStored (ZMQ)'],
+      ['Block Size', '64-128 tokens per block'],
+      ['Eviction', 'LRU per pod'],
+      ['Tier', 'GPU VRAM (primary), CPU RAM (offload)']
+    ],
+    links: [
+      ['KV Events', 'https://github.com/llm-d/llm-d-kv-cache']
+    ]
+  },
+  prefillPool: {
+    t: 'Prefill Pool (vLLM)',
+    d: 'Compute-optimized vLLM pods for prefill phase. Smaller tensor parallelism (TP=2) optimized for compute-bound workload.',
+    dt: [
+      ['Workload', 'Compute-bound (82-95% GPU utilization)'],
+      ['Tensor Parallel', 'TP=2 (smaller for compute efficiency)'],
+      ['GPU Memory', '0.90 (needs optimizer state space)'],
+      ['Output', 'KV cache + KVXfer metadata']
+    ],
+    links: [
+      ['P/D Disaggregation', 'https://llm-d.ai/docs/guide/Installation/pd-disaggregation'],
+      ['vLLM Disagg', 'https://docs.vllm.ai/en/latest/features/disagg_prefill/']
+    ]
+  },
+  nixl: {
+    t: 'NIXL (NVIDIA Inference Transfer Library)',
+    d: 'GPU-to-GPU KV cache transfer via RDMA (InfiniBand/RoCE). Sub-5ms latency for wire-speed disaggregated serving.',
+    dt: [
+      ['Transport', 'UCX (default) or LIBFABRIC'],
+      ['Network', 'InfiniBand HDR, RoCE, TCP fallback'],
+      ['Latency', '< 5ms for 47-token prompt'],
+      ['Ports', 'UDP 4791 (RoCE), TCP 5557 (metadata)']
+    ],
+    links: [
+      ['NIXL Guide', 'https://docs.vllm.ai/en/stable/features/nixl_connector_usage/'],
+      ['NVIDIA NIXL', 'https://developer.nvidia.com/blog/enhancing-distributed-inference-performance-with-the-nvidia-inference-transfer-library/']
+    ]
+  },
+  decodePool: {
+    t: 'Decode Pool (vLLM)',
+    d: 'Memory-optimized vLLM pods for autoregressive decode. Larger tensor parallelism (TP=8) optimized for memory-bound workload.',
+    dt: [
+      ['Workload', 'Memory-bound (15-65% compute)'],
+      ['Tensor Parallel', 'TP=8 (larger for KV memory distribution)'],
+      ['GPU Memory', '0.92 (more space for KV cache)'],
+      ['Input', 'KV cache via NIXL pull']
+    ],
+    links: [
+      ['P/D Disaggregation', 'https://llm-d.ai/docs/guide/Installation/pd-disaggregation'],
+      ['vLLM Disagg', 'https://docs.vllm.ai/en/latest/features/disagg_prefill/']
+    ]
+  }
+};
 
-        function getColor(key) {
-            return isDark ? colors.dark[key] : colors.light[key];
-        }
+// Flow definitions
+const flows = {
+  'cache-hit': {
+    name: 'Cache Hit Flow (Fast Path)',
+    steps: [
+      { nodes: ['user'], desc: 'User sends POST /v1/completions', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'ext-proc invokes EPP for routing', arrow: true },
+      { nodes: ['epp', 'kvindex'], desc: 'EPP queries KV Cache Index', arrow: true },
+      { nodes: ['kvindex'], desc: 'Returns cache scores: Pod A (85%), Pod B (12%)', highlight: true },
+      { nodes: ['epp'], desc: 'EPP scores: cache=3×85, queue=2×1, util=2×0.6 → Pod A wins' },
+      { nodes: ['epp', 'vllmPodA'], desc: 'Routes to Pod A (highest score)', arrow: true },
+      { nodes: ['vllmPodA'], desc: 'Serves with 85% cached KV (fast TTFT)', highlight: true },
+      { nodes: ['vllmPodA', 'response'], desc: 'Streams tokens to client', arrow: true, resp: true }
+    ]
+  },
+  'cache-miss': {
+    name: 'Cache Miss Flow (Cold Start)',
+    steps: [
+      { nodes: ['user'], desc: 'User sends POST /v1/completions (new prompt)', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'ext-proc invokes EPP for routing', arrow: true },
+      { nodes: ['epp', 'kvindex'], desc: 'EPP queries KV Cache Index', arrow: true },
+      { nodes: ['kvindex'], desc: 'Returns low cache scores: all pods < 5%', highlight: true },
+      { nodes: ['epp'], desc: 'EPP fallback: routes to least-loaded pod (Pod B)' },
+      { nodes: ['epp', 'vllmPodB'], desc: 'Routes to Pod B (queue depth = 0)', arrow: true },
+      { nodes: ['vllmPodB'], desc: 'Full prefill required (computes entire context)', highlight: true },
+      { nodes: ['vllmPodB', 'kvstore'], desc: 'Publishes BlockStored events to KV index', arrow: true },
+      { nodes: ['vllmPodB', 'response'], desc: 'Streams tokens (higher TTFT)', arrow: true, resp: true }
+    ]
+  },
+  'disaggregated': {
+    name: 'Disaggregated Serving (P/D Split)',
+    steps: [
+      { nodes: ['user'], desc: 'User sends POST /v1/completions (long prompt)', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'EPP determines prefill pool routing', arrow: true },
+      { nodes: ['epp', 'prefillPool'], desc: 'Routes to prefill pool (TP=2, compute-optimized)', arrow: true },
+      { nodes: ['prefillPool'], desc: 'Computes KV cache (prefill phase)', highlight: true },
+      { nodes: ['prefillPool', 'nixl'], desc: 'Returns KVXfer metadata to sidecar', arrow: true },
+      { nodes: ['nixl'], desc: 'GPU-to-GPU RDMA transfer via UCX/InfiniBand', highlight: true },
+      { nodes: ['nixl', 'decodePool'], desc: 'KV cache pulled by decode pool', arrow: true },
+      { nodes: ['decodePool'], desc: 'Autoregressive decode (TP=8, memory-optimized)', highlight: true },
+      { nodes: ['decodePool', 'response'], desc: 'Streams tokens (optimized throughput)', arrow: true, resp: true }
+    ]
+  }
+};
 
-        function drawNode(node, active = false) {
-            const alpha = active ? 1.0 : 0.3;
-            ctx.save();
-            ctx.globalAlpha = alpha;
+function resize() {
+  const panelW = 380;
+  W = canvas.width = window.innerWidth - panelW;
+  H = canvas.height = window.innerHeight;
+  sc = Math.min(W / LW, H / LH) * 0.95;
+  ox = (W - LW * sc) / 2;
+  draw();
+}
 
-            // Draw rectangle
-            ctx.fillStyle = getColor(node.type);
-            ctx.strokeStyle = active ? getColor('arrow') : getColor('inactive');
-            ctx.lineWidth = active ? 3 : 1;
+function C() {
+  return isDark
+    ? { bg:'#0d1117', box:'#161b22', bdr:'#30363d', txt:'#c9d1d9', dim:'#8b949e' }
+    : { bg:'#fff', box:'#f6f8fa', bdr:'#d0d7de', txt:'#24292f', dim:'#656d76' };
+}
 
-            roundRect(ctx, node.x, node.y, node.w, node.h, 8);
-            ctx.fill();
-            ctx.stroke();
+function drawNode(key, active, highlight) {
+  const n = N[key];
+  const c = C();
 
-            // Draw label
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 14px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+  if (n.type === 'boundary') {
+    ctx.strokeStyle = c.bdr;
+    ctx.setLineDash([8, 4]);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tx(n.x), ty(n.y), ts(n.w), ts(n.h));
+    ctx.setLineDash([]);
+    if (n.label) {
+      ctx.fillStyle = c.dim;
+      ctx.font = `${ts(12)}px sans-serif`;
+      ctx.fillText(n.label, tx(n.x + 10), ty(n.y + 20));
+    }
+    return;
+  }
 
-            const lines = node.label.split('\n');
-            const lineHeight = 18;
-            const startY = node.y + node.h / 2 - (lines.length - 1) * lineHeight / 2;
+  ctx.save();
+  ctx.globalAlpha = active ? 1 : 0.4;
 
-            lines.forEach((line, i) => {
-                ctx.fillText(line, node.x + node.w / 2, startY + i * lineHeight);
-            });
+  const x = tx(n.x), y = ty(n.y), w = ts(n.w), h = ts(n.h), r = ts(8);
 
-            ctx.restore();
-        }
+  // Fill
+  ctx.fillStyle = n.color || '#a78bfa';
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.fill();
 
-        function drawArrow(from, to) {
-            ctx.save();
-            ctx.strokeStyle = getColor('arrow');
-            ctx.fillStyle = getColor('arrow');
-            ctx.lineWidth = 3;
+  // Border
+  if (highlight || key === highlightKey) {
+    ctx.strokeStyle = n.color || '#a78bfa';
+    ctx.lineWidth = ts(3);
+    ctx.shadowBlur = ts(20);
+    ctx.shadowColor = n.color || '#a78bfa';
+  } else if (active) {
+    ctx.strokeStyle = n.color || '#a78bfa';
+    ctx.lineWidth = ts(2);
+  } else {
+    ctx.strokeStyle = c.bdr;
+    ctx.lineWidth = ts(1);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
-            // Calculate best connection points
-            let fromX, fromY, toX, toY;
+  // Text
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const fontSize = n.fs || 16;
+  ctx.font = `bold ${ts(fontSize)}px sans-serif`;
+  const cy = n.sublabel ? y + h/2 - ts(10) : y + h/2;
+  ctx.fillText(n.label, x + w/2, cy);
 
-            const fromCenterX = from.x + from.w / 2;
-            const fromCenterY = from.y + from.h / 2;
-            const toCenterX = to.x + to.w / 2;
-            const toCenterY = to.y + to.h / 2;
+  if (n.sublabel) {
+    ctx.font = `${ts(fontSize * 0.75)}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText(n.sublabel, x + w/2, cy + ts(18));
+  }
 
-            const dx = toCenterX - fromCenterX;
-            const dy = toCenterY - fromCenterY;
+  ctx.restore();
+}
 
-            // Determine connection points based on relative positions
-            if (Math.abs(dx) > Math.abs(dy)) {
-                // Horizontal flow
-                if (dx > 0) {
-                    // From left to right
-                    fromX = from.x + from.w;
-                    fromY = fromCenterY;
-                    toX = to.x;
-                    toY = toCenterY;
-                } else {
-                    // From right to left
-                    fromX = from.x;
-                    fromY = fromCenterY;
-                    toX = to.x + to.w;
-                    toY = toCenterY;
-                }
-            } else {
-                // Vertical flow
-                if (dy > 0) {
-                    // From top to bottom
-                    fromX = fromCenterX;
-                    fromY = from.y + from.h;
-                    toX = toCenterX;
-                    toY = to.y;
-                } else {
-                    // From bottom to top
-                    fromX = fromCenterX;
-                    fromY = from.y;
-                    toX = toCenterX;
-                    toY = to.y + to.h;
-                }
-            }
+function drawArrow(fromKey, toKey) {
+  const from = N[fromKey], to = N[toKey];
+  const c = C();
 
-            // Draw line with curve for non-straight paths
-            ctx.beginPath();
-            ctx.moveTo(fromX, fromY);
+  let x1, y1, x2, y2;
 
-            if (Math.abs(dx) > 20 && Math.abs(dy) > 20) {
-                // Curved path for diagonal connections
-                const midX = (fromX + toX) / 2;
-                const midY = (fromY + toY) / 2;
-                ctx.quadraticCurveTo(midX, midY, toX, toY);
-            } else {
-                // Straight line
-                ctx.lineTo(toX, toY);
-            }
-            ctx.stroke();
+  const fc = { x: from.x + from.w/2, y: from.y + from.h/2 };
+  const tc = { x: to.x + to.w/2, y: to.y + to.h/2 };
+  const dx = tc.x - fc.x, dy = tc.y - fc.y;
 
-            // Draw arrowhead
-            const angle = Math.atan2(toY - fromY, toX - fromX);
-            const arrowSize = 12;
-            ctx.beginPath();
-            ctx.moveTo(toX, toY);
-            ctx.lineTo(
-                toX - arrowSize * Math.cos(angle - Math.PI / 6),
-                toY - arrowSize * Math.sin(angle - Math.PI / 6)
-            );
-            ctx.lineTo(
-                toX - arrowSize * Math.cos(angle + Math.PI / 6),
-                toY - arrowSize * Math.sin(angle + Math.PI / 6)
-            );
-            ctx.closePath();
-            ctx.fill();
+  if (Math.abs(dx) > Math.abs(dy)) {
+    // Horizontal
+    if (dx > 0) {
+      x1 = from.x + from.w; y1 = fc.y;
+      x2 = to.x; y2 = tc.y;
+    } else {
+      x1 = from.x; y1 = fc.y;
+      x2 = to.x + to.w; y2 = tc.y;
+    }
+  } else {
+    // Vertical
+    if (dy > 0) {
+      x1 = fc.x; y1 = from.y + from.h;
+      x2 = tc.x; y2 = to.y;
+    } else {
+      x1 = fc.x; y1 = from.y;
+      x2 = tc.x; y2 = to.y + to.h;
+    }
+  }
 
-            ctx.restore();
-        }
+  ctx.strokeStyle = '#a78bfa';
+  ctx.fillStyle = '#a78bfa';
+  ctx.lineWidth = ts(3);
 
-        function roundRect(ctx, x, y, w, h, r) {
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.lineTo(x + w - r, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h - r);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            ctx.lineTo(x + r, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-        }
+  ctx.beginPath();
+  ctx.moveTo(tx(x1), ty(y1));
+  ctx.lineTo(tx(x2), ty(y2));
+  ctx.stroke();
 
-        function render() {
-            // Clear canvas
-            ctx.fillStyle = getColor('bg');
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Arrowhead
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = ts(12);
+  ctx.beginPath();
+  ctx.moveTo(tx(x2), ty(y2));
+  ctx.lineTo(tx(x2 - size * Math.cos(angle - Math.PI/6)), ty(y2 - size * Math.sin(angle - Math.PI/6)));
+  ctx.lineTo(tx(x2 - size * Math.cos(angle + Math.PI/6)), ty(y2 - size * Math.sin(angle + Math.PI/6)));
+  ctx.closePath();
+  ctx.fill();
+}
 
-            const flow = flows[currentFlow];
-            const activeNodes = new Set();
-            const arrows = [];
+function draw() {
+  const c = C();
+  ctx.fillStyle = c.bg;
+  ctx.fillRect(0, 0, W, H);
 
-            // Collect active nodes and arrows up to current step
-            for (let i = 0; i <= currentStep; i++) {
-                const step = flow.steps[i];
-                step.nodes.forEach(n => activeNodes.add(n));
+  const flow = flows[currentFlow];
+  const activeNodes = new Set();
+  const arrows = [];
+  let highlightNodes = new Set();
 
-                if (step.arrow && step.nodes.length === 2) {
-                    arrows.push({ from: step.nodes[0], to: step.nodes[1] });
-                }
-            }
+  for (let i = 0; i <= stepIdx; i++) {
+    const step = flow.steps[i];
+    step.nodes.forEach(n => activeNodes.add(n));
+    if (step.arrow && step.nodes.length === 2) {
+      arrows.push([step.nodes[0], step.nodes[1]]);
+    }
+    if (i === stepIdx && step.highlight) {
+      step.nodes.forEach(n => highlightNodes.add(n));
+    }
+  }
 
-            // Draw all nodes
-            Object.entries(N).forEach(([key, node]) => {
-                drawNode(node, activeNodes.has(key));
-            });
+  // Draw boundaries first
+  ['cluster', 'poolBoundary'].forEach(key => {
+    if (N[key]) drawNode(key, true, false);
+  });
 
-            // Draw arrows
-            arrows.forEach(({ from, to }) => {
-                drawArrow(N[from], N[to]);
-            });
-        }
+  // Draw nodes
+  Object.keys(N).forEach(key => {
+    if (N[key].type !== 'boundary') {
+      drawNode(key, activeNodes.has(key), highlightNodes.has(key));
+    }
+  });
 
-        function updateStepsList() {
-            const flow = flows[currentFlow];
-            stepsList.innerHTML = '';
+  // Draw arrows
+  arrows.forEach(([from, to]) => drawArrow(from, to));
+}
 
-            flow.steps.forEach((step, idx) => {
-                const div = document.createElement('div');
-                div.className = 'step-item';
-                if (idx === currentStep) div.classList.add('active');
-                if (idx < currentStep) div.classList.add('completed');
+function updateUI() {
+  const flow = flows[currentFlow];
 
-                div.innerHTML = `
-                    <span class="step-number">${idx + 1}</span>
-                    <div style="display: inline-block; vertical-align: top; width: calc(100% - 36px);">
-                        <div class="step-title">${step.desc}</div>
-                        <div class="step-detail">${step.detail}</div>
-                    </div>
-                `;
+  // Update steps list
+  const stepsList = document.getElementById('stepsList');
+  stepsList.innerHTML = '';
+  flow.steps.forEach((step, i) => {
+    const div = document.createElement('div');
+    div.className = 'step ' + (i < stepIdx ? 'done' : i === stepIdx ? 'active' : 'pending');
+    div.innerHTML = `<span class="step-mk"></span><span>${step.desc}</span>`;
+    div.onclick = () => { stepIdx = i; updateUI(); draw(); };
+    stepsList.appendChild(div);
+  });
 
-                div.onclick = () => {
-                    currentStep = idx;
-                    updateStepsList();
-                    render();
-                    updateStepInfo();
-                };
+  // Update inspector
+  const inspector = document.getElementById('inspector');
+  const step = flow.steps[stepIdx];
+  let html = '';
 
-                stepsList.appendChild(div);
-            });
-        }
+  if (step.req) {
+    html += '<div class="insp-sec">Request Headers:</div>';
+    html += '<div class="insp-line">POST /v1/completions HTTP/2</div>';
+    html += '<div class="insp-line">Host: llm-d-gateway.cluster.local</div>';
+    html += '<div class="insp-line">Content-Type: application/json</div>';
+    html += '<div class="insp-sec">Body:</div>';
+    html += '<div class="insp-line">{"model": "llama-3.1-70b",</div>';
+    html += '<div class="insp-line"> "messages": [{"role": "user", "content": "..."}],</div>';
+    html += '<div class="insp-line"> "max_tokens": 100}</div>';
+  } else if (step.resp) {
+    html += '<div class="insp-sec">Response:</div>';
+    html += '<div class="insp-line">HTTP/2 200 OK</div>';
+    html += '<div class="insp-line">Content-Type: text/event-stream</div>';
+    html += '<div class="insp-sec">Body (streaming):</div>';
+    html += '<div class="insp-line">data: {"choices": [{"delta": {"content": "..."}}]}</div>';
+  } else {
+    html += `<div class="insp-sec">Step ${stepIdx + 1}:</div>`;
+    html += `<div class="insp-line">${step.desc}</div>`;
+    if (step.nodes.length === 1 && tips[step.nodes[0]]) {
+      html += `<div style="margin-top:8px;font-size:11px;color:#8b949e">Click "${N[step.nodes[0]].label}" for details</div>`;
+    }
+  }
 
-        function updateStepInfo() {
-            const flow = flows[currentFlow];
-            document.getElementById('step-info').textContent =
-                `Step ${currentStep + 1} of ${flow.steps.length}`;
-        }
+  inspector.innerHTML = html;
+  draw();
+}
 
-        function play() {
-            const flow = flows[currentFlow];
-            if (currentStep >= flow.steps.length - 1) {
-                currentStep = 0;
-            }
-            isPlaying = true;
-            document.getElementById('play-btn').textContent = 'Pause';
+function changeFlow() {
+  currentFlow = document.getElementById('flowSel').value;
+  stepIdx = 0;
+  updateUI();
+}
 
-            playTimer = setInterval(() => {
-                currentStep++;
-                if (currentStep >= flow.steps.length) {
-                    pause();
-                    currentStep = flow.steps.length - 1;
-                }
-                render();
-                updateStepsList();
-                updateStepInfo();
-            }, playbackSpeed);
-        }
+function togglePlay() {
+  running = !running;
+  document.getElementById('playBtn').textContent = running ? '❚❚ Pause' : '▶ Play';
+  if (running) animate();
+}
 
-        function pause() {
-            isPlaying = false;
-            clearInterval(playTimer);
-            document.getElementById('play-btn').textContent = 'Play';
-        }
+function reset() {
+  running = false;
+  stepIdx = 0;
+  document.getElementById('playBtn').textContent = '▶ Play';
+  updateUI();
+}
 
-        function reset() {
-            pause();
-            currentStep = 0;
-            render();
-            updateStepsList();
-            updateStepInfo();
-        }
+function changeSpeed() {
+  playbackSpeed = parseFloat(document.getElementById('speedSel').value);
+}
 
-        // Event listeners
-        document.querySelectorAll('.flow-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentFlow = btn.dataset.flow;
-                reset();
-            });
-        });
+function animate() {
+  if (!running) return;
+  const flow = flows[currentFlow];
+  if (stepIdx < flow.steps.length - 1) {
+    stepTimer = setTimeout(() => {
+      stepIdx++;
+      updateUI();
+      animate();
+    }, 1000 / playbackSpeed);
+  } else {
+    running = false;
+    document.getElementById('playBtn').textContent = '▶ Play';
+  }
+}
 
-        document.getElementById('play-btn').addEventListener('click', () => {
-            if (isPlaying) pause();
-            else play();
-        });
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.classList.toggle('light');
+  document.getElementById('thm').textContent = isDark ? '☾' : '☀';
+  draw();
+}
 
-        document.getElementById('reset-btn').addEventListener('click', reset);
+let overlayWasRunning = false;
+function showOverlay(key) {
+  const tip = tips[key], n = N[key];
+  if (!tip) return;
 
-        document.getElementById('prev-btn').addEventListener('click', () => {
-            if (currentStep > 0) {
-                currentStep--;
-                render();
-                updateStepsList();
-                updateStepInfo();
-            }
-        });
+  overlayWasRunning = running;
+  highlightKey = key;
+  if (running) {
+    running = false;
+    clearTimeout(stepTimer);
+    document.getElementById('playBtn').textContent = '▶ Play';
+  }
 
-        document.getElementById('next-btn').addEventListener('click', () => {
-            const flow = flows[currentFlow];
-            if (currentStep < flow.steps.length - 1) {
-                currentStep++;
-                render();
-                updateStepsList();
-                updateStepInfo();
-            }
-        });
+  const ov = document.getElementById('overlay');
+  const card = document.getElementById('overlay-card');
+  document.getElementById('overlay-accent').style.background = n.color || '#a78bfa';
+  document.getElementById('overlay-title').textContent = tip.t;
+  document.getElementById('overlay-title').style.color = n.color || '#c9d1d9';
+  document.getElementById('overlay-desc').textContent = tip.d;
 
-        document.getElementById('speed-control').addEventListener('change', (e) => {
-            playbackSpeed = parseInt(e.target.value);
-            if (isPlaying) {
-                pause();
-                play();
-            }
-        });
+  let dh = '';
+  if (tip.dt) {
+    tip.dt.forEach(([l,v]) => {
+      dh += `<div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid #21262d"><span style="color:#8b949e;min-width:110px;flex-shrink:0">${l}</span><span style="color:#c9d1d9">${v}</span></div>`;
+    });
+  }
+  if (tip.links) {
+    dh += '<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">';
+    tip.links.forEach(([l,u]) => {
+      dh += `<a href="${u}" target="_blank" style="color:#a78bfa;font-size:12px;text-decoration:none;padding:4px 10px;border:1px solid #30363d;border-radius:6px;transition:all .15s" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='#30363d'">${l} ↗</a>`;
+    });
+    dh += '</div>';
+  }
+  document.getElementById('overlay-details').innerHTML = dh;
+  document.getElementById('overlay-resume').style.display = overlayWasRunning ? 'block' : 'none';
 
-        document.getElementById('theme-toggle').addEventListener('click', () => {
-            isDark = !isDark;
-            document.body.classList.toggle('light');
-            render();
-        });
+  const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+  let cx = nx + nw + 20;
+  if (cx + 440 > W) cx = Math.max(10, nx - 440);
+  const cy = Math.max(10, Math.min(ny, H - 500));
+  card.style.left = cx + 'px';
+  card.style.top = cy + 'px';
+  ov.style.display = 'block';
 
-        // Initial render
-        render();
-        updateStepsList();
-        updateStepInfo();
-    </script>
+  const hb = document.getElementById('highlight-box');
+  hb.style.left = nx + 'px';
+  hb.style.top = ny + 'px';
+  hb.style.width = nw + 'px';
+  hb.style.height = nh + 'px';
+  hb.style.border = `3px solid ${n.color || '#a78bfa'}`;
+  hb.style.boxShadow = `0 0 30px ${n.color || '#a78bfa'}88`;
+  hb.style.background = isDark ? '#161b22' : '#f6f8fa';
+  hb.style.display = 'block';
+
+  draw();
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('highlight-box').style.display = 'none';
+  highlightKey = null;
+  draw();
+  if (overlayWasRunning) {
+    running = true;
+    document.getElementById('playBtn').textContent = '❚❚ Pause';
+    animate();
+  }
+}
+
+// Click handler
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  for (const [key, n] of Object.entries(N)) {
+    if (n.type === 'boundary') continue;
+    const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+    if (mx >= nx && mx <= nx + nw && my >= ny && my <= ny + nh) {
+      if (tips[key]) {
+        showOverlay(key);
+        break;
+      }
+    }
+  }
+});
+
+// Hover cursor
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let found = false;
+
+  for (const [key, n] of Object.entries(N)) {
+    if (n.type === 'boundary') continue;
+    const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+    if (mx >= nx && mx <= nx + nw && my >= ny && my <= ny + nh && tips[key]) {
+      found = true;
+      break;
+    }
+  }
+  canvas.style.cursor = found ? 'pointer' : 'default';
+});
+
+window.addEventListener('resize', resize);
+resize();
+updateUI();
+</script>
 </body>
 </html>
