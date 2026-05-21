@@ -41,7 +41,7 @@ body.light .step.pending{color:#b0b8c1}
 .insp-section{flex:3;overflow-y:auto;padding:10px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px}
 .insp-title{font-weight:700;font-size:14px;margin-bottom:6px;font-family:-apple-system,sans-serif}
 .insp-sec{margin:6px 0 2px;font-weight:600;color:#a78bfa;font-size:12px;font-family:-apple-system,sans-serif}
-.insp-line{margin:1px 0;padding:2px 6px;border-radius:3px;white-space:pre-wrap;line-height:1.6}
+.insp-line{margin:1px 0;padding:2px 6px;border-radius:3px;white-space:pre;line-height:1.6}
 
 .theme-toggle{position:fixed;top:16px;right:396px;z-index:200;width:36px;height:36px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#c9d1d9;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s}
 body.light .theme-toggle{background:#f6f8fa;color:#24292f;border-color:#d0d7de}
@@ -107,11 +107,12 @@ body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-we
 
 <div class="legend">
   <div class="legend-title">Legend</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Request</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Gateway</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div>Inference Pods</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#79c0ff"></div>EPP / Routing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div>Storage / Cache</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div>Transfer</div>
   <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>Response</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#f0883e"></div>Auth / Rate Limit</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#d2a8ff"></div>IPP Container</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#79c0ff"></div>Req / Resp Plugins</div>
 </div>
 
 <div id="overlay" onclick="if(event.target===this)closeOverlay()">
@@ -130,7 +131,7 @@ body.light .steps-section::-webkit-scrollbar-thumb,body.light .insp-section::-we
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 let W, H, sc = 1, ox = 0, oy = 30;
-const LW = 1400, LH = 1050;
+const LW = 1400, LH = 1000;
 
 let isDark = true;
 let currentFlow = 'cache-hit';
@@ -140,73 +141,238 @@ let playbackSpeed = 1;
 let stepTimer = null;
 let highlightKey = null;
 
+// Transform helpers
 const tx = x => x * sc + ox;
 const ty = y => y * sc + oy;
 const ts = s => s * sc;
 
-// Nodes - matching AI Gateway structure
+// Node definitions - grid-based layout with proper alignment
+// Grid: 280px left margin, components use 280px width + 40px gap
 const N = {
-  user: { x: 80, y: 160, w: 140, h: 60, label: 'Client / Agent', type: 'icon' },
+  // External - left side
+  user: { x: 60, y: 150, w: 160, h: 70, label: 'Client / User', type: 'external', color: '#58a6ff' },
 
-  cluster: { x: 260, y: 80, w: 1070, h: 880, type: 'boundary' },
-  llmdGateway: { x: 295, y: 115, w: 1000, h: 500, type: 'container', label: 'llm-d Gateway', color: '#58a6ff' },
+  // Cluster boundary
+  cluster: { x: 280, y: 60, w: 1050, h: 860, type: 'boundary', label: 'kubernetes cluster' },
 
-  gateway: { x: 360, y: 145, w: 700, h: 90, label: 'Gateway API', sublabel: '(Istio/Envoy)', color: '#58a6ff', fs: 24 },
+  // Top tier - Gateway (full width)
+  gateway: { x: 320, y: 100, w: 960, h: 100, label: 'Gateway API', sublabel: '(Istio/Envoy)', color: '#58a6ff', fs: 26 },
 
-  eppContainer: { x: 800, y: 290, w: 240, h: 280, type: 'container', label: 'Scheduler / EPP (ext_proc)', color: '#d2a8ff' },
-  epp: { x: 825, y: 330, w: 190, h: 70, label: 'Endpoint Picker', sublabel: 'Pod Selection', color: '#79c0ff', fs: 18, inner: true },
-  kvindex: { x: 825, y: 430, w: 190, h: 100, label: 'KV Cache Index', sublabel: 'Block tracker', color: '#f0883e', fs: 16, inner: true },
+  // Second tier - ext-proc and routing layer
+  extproc: { x: 320, y: 240, w: 450, h: 90, label: 'Envoy ext-proc', sublabel: '(gRPC hook)', color: '#d2a8ff', fs: 22 },
+  epp: { x: 810, y: 240, w: 220, h: 90, label: 'EPP', sublabel: '(Endpoint Picker)', color: '#79c0ff', fs: 24 },
+  kvindex: { x: 1070, y: 240, w: 210, h: 90, label: 'KV Cache Index', sublabel: '(Block tracker)', color: '#f0883e', fs: 20 },
 
-  pool: { x: 310, y: 640, w: 780, h: 165, type: 'boundary', label: 'InferencePool' },
-  vllmPodA: { x: 350, y: 680, w: 220, h: 90, label: 'vLLM', sublabel: 'Decode Pod A', color: '#d2a8ff', fs: 18 },
-  nixl: { x: 620, y: 695, w: 200, h: 60, label: 'NIXL', sublabel: 'KV Transfer (KVXfer)', color: '#8b949e', fs: 14 },
-  vllmPodB: { x: 860, y: 680, w: 200, h: 90, label: 'vLLM', sublabel: 'Prefill Pod B', color: '#d2a8ff', fs: 18 },
+  // InferencePool boundary
+  poolBoundary: { x: 300, y: 380, w: 990, h: 200, type: 'boundary', label: 'InferencePool' },
+
+  // Third tier - vLLM Pods (equal spacing within pool)
+  vllmPodA: { x: 330, y: 430, w: 280, h: 110, label: 'vLLM Pod A', sublabel: 'Cache hit: 85%', color: '#d2a8ff', fs: 20 },
+  vllmPodB: { x: 650, y: 430, w: 280, h: 110, label: 'vLLM Pod B', sublabel: 'Least loaded', color: '#d2a8ff', fs: 20 },
+  vllmPodC: { x: 970, y: 430, w: 280, h: 110, label: 'vLLM Pod C', sublabel: 'Low cache hit', color: '#d2a8ff', fs: 20 },
+
+  // Fourth tier - KV Cache Store (aligned with right pods)
+  kvstore: { x: 970, y: 620, w: 280, h: 90, label: 'KV Cache Store', sublabel: '(Persistent)', color: '#f0883e', fs: 20 },
+
+  // Fifth tier - Disaggregated serving (horizontal flow)
+  prefillPool: { x: 330, y: 760, w: 280, h: 110, label: 'Prefill Pool', sublabel: '(vLLM - TP=2)', color: '#d2a8ff', fs: 22 },
+  nixl: { x: 650, y: 780, w: 280, h: 70, label: 'NIXL Transfer', sublabel: '(GPU-GPU RDMA)', color: '#8b949e', fs: 18 },
+  decodePool: { x: 970, y: 760, w: 280, h: 110, label: 'Decode Pool', sublabel: '(vLLM - TP=8)', color: '#d2a8ff', fs: 22 },
+
+  // Bottom - Response (centered)
+  response: { x: 650, y: 900, w: 280, h: 70, label: 'Response', sublabel: '(streaming)', type: 'external', color: '#3fb950' },
 };
 
-const tips = {};
+// Component descriptions with technical details
+const tips = {
+  gateway: {
+    t: 'Gateway API (Istio/Envoy)',
+    d: 'Kubernetes Gateway API implementation using Envoy proxy. Entry point for all inference requests with support for ext-proc filters.',
+    dt: [
+      ['Standard', 'Kubernetes Gateway API (v1+)'],
+      ['Implementation', 'Istio, GKE Gateway, or Agentgateway'],
+      ['Protocol', 'HTTP/1.1, HTTP/2, gRPC'],
+      ['TLS', 'Termination at gateway layer']
+    ],
+    links: [
+      ['Gateway API Docs', 'https://gateway-api.sigs.k8s.io/'],
+      ['llm-d Gateway Guide', 'https://deepwiki.com/llm-d/llm-d/2.3-inference-gateway-and-routing']
+    ]
+  },
+  extproc: {
+    t: 'Envoy ext-proc (External Processing)',
+    d: 'Envoy filter that calls the EPP via gRPC for intelligent routing decisions before forwarding requests to backend vLLM pods.',
+    dt: [
+      ['Protocol', 'gRPC bidirectional stream'],
+      ['Function', 'Pre-request routing hook'],
+      ['Called By', 'Envoy when HTTPRoute → InferencePool'],
+      ['Enables', 'KV-cache aware routing, predicted latency']
+    ],
+    links: [
+      ['Envoy ext-proc', 'https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter'],
+      ['llm-d Integration', 'https://deepwiki.com/llm-d/llm-d-inference-scheduler/11.2-istio-and-kgateway-integration']
+    ]
+  },
+  epp: {
+    t: 'EPP (Endpoint Picker)',
+    d: 'Core routing engine that evaluates InferencePool pods using configurable scorers (prefix cache, queue depth, predicted latency, KV utilization).',
+    dt: [
+      ['Scheduling', 'Filter → Score → Select'],
+      ['Scorers', 'Prefix cache (3), KV util (2), Queue (2)'],
+      ['Response Time', 'Sub-millisecond for cached prompts'],
+      ['Saturation', 'Flow control with priority bands']
+    ],
+    links: [
+      ['EPP Architecture', 'https://github.com/llm-d/llm-d-router'],
+      ['Scoring Algorithms', 'https://developers.redhat.com/articles/2025/10/07/master-kv-cache-aware-routing-llm-d-efficient-ai-inference']
+    ]
+  },
+  kvindex: {
+    t: 'KV Cache Index',
+    d: 'Real-time index tracking KV cache block residency across pods. Uses chained FNV-64a hashing over CBOR for deterministic block keys.',
+    dt: [
+      ['Event Source', 'ZMQ from vLLM pods'],
+      ['Block Hash', 'FNV-64a chained over tokens'],
+      ['Lookup', 'requestKey → [PodEntry{pod, tier}]'],
+      ['Memory', '~339 KB for 365 GB VRAM (1M:1 ratio)']
+    ],
+    links: [
+      ['KV Cache Architecture', 'https://github.com/llm-d/llm-d-kv-cache/blob/main/docs/architecture.md'],
+      ['Block Hashing', 'https://llm-d.ai/blog/kvcache-wins-you-can-see']
+    ]
+  },
+  vllmPodA: {
+    t: 'vLLM Pod A (High Cache Hit)',
+    d: 'vLLM inference server with 85% prefix cache overlap for this request. EPP routes here for fast TTFT.',
+    dt: [
+      ['Engine', 'vLLM with prefix caching enabled'],
+      ['Cache Hit', '85% (85% of prefill skipped)'],
+      ['TTFT', '~340ms (88% faster than cold start)'],
+      ['GPU Memory', '~90% utilization']
+    ],
+    links: [
+      ['vLLM Docs', 'https://docs.vllm.ai/'],
+      ['Prefix Caching', 'https://docs.vllm.ai/en/latest/features/prefix_caching.html']
+    ]
+  },
+  vllmPodB: {
+    t: 'vLLM Pod B (Least Loaded)',
+    d: 'vLLM pod with lowest queue depth. Selected when cache affinity is low across all pods (fallback routing).',
+    dt: [
+      ['Selection Reason', 'Lowest queue depth'],
+      ['Cache Hit', '3% (minimal overlap)'],
+      ['Prefill', 'Full context computation required'],
+      ['Queue Depth', '0-2 requests']
+    ],
+    links: [
+      ['vLLM Docs', 'https://docs.vllm.ai/'],
+      ['Queue Scorer', 'https://gateway-api-inference-extension.sigs.k8s.io/guides/epp-configuration/config-text/']
+    ]
+  },
+  kvstore: {
+    t: 'KV Cache Store',
+    d: 'Stores newly computed KV cache blocks for future requests with similar prefixes. Publishes BlockStored events to KV Cache Index via ZMQ.',
+    dt: [
+      ['Event Type', 'BlockStored (ZMQ)'],
+      ['Block Size', '64-128 tokens per block'],
+      ['Eviction', 'LRU per pod'],
+      ['Tier', 'GPU VRAM (primary), CPU RAM (offload)']
+    ],
+    links: [
+      ['KV Events', 'https://github.com/llm-d/llm-d-kv-cache']
+    ]
+  },
+  prefillPool: {
+    t: 'Prefill Pool (vLLM)',
+    d: 'Compute-optimized vLLM pods for prefill phase. Smaller tensor parallelism (TP=2) optimized for compute-bound workload.',
+    dt: [
+      ['Workload', 'Compute-bound (82-95% GPU utilization)'],
+      ['Tensor Parallel', 'TP=2 (smaller for compute efficiency)'],
+      ['GPU Memory', '0.90 (needs optimizer state space)'],
+      ['Output', 'KV cache + KVXfer metadata']
+    ],
+    links: [
+      ['P/D Disaggregation', 'https://llm-d.ai/docs/guide/Installation/pd-disaggregation'],
+      ['vLLM Disagg', 'https://docs.vllm.ai/en/latest/features/disagg_prefill/']
+    ]
+  },
+  nixl: {
+    t: 'NIXL (NVIDIA Inference Transfer Library)',
+    d: 'GPU-to-GPU KV cache transfer via RDMA (InfiniBand/RoCE). Sub-5ms latency for wire-speed disaggregated serving.',
+    dt: [
+      ['Transport', 'UCX (default) or LIBFABRIC'],
+      ['Network', 'InfiniBand HDR, RoCE, TCP fallback'],
+      ['Latency', '< 5ms for 47-token prompt'],
+      ['Ports', 'UDP 4791 (RoCE), TCP 5557 (metadata)']
+    ],
+    links: [
+      ['NIXL Guide', 'https://docs.vllm.ai/en/stable/features/nixl_connector_usage/'],
+      ['NVIDIA NIXL', 'https://developer.nvidia.com/blog/enhancing-distributed-inference-performance-with-the-nvidia-inference-transfer-library/']
+    ]
+  },
+  decodePool: {
+    t: 'Decode Pool (vLLM)',
+    d: 'Memory-optimized vLLM pods for autoregressive decode. Larger tensor parallelism (TP=8) optimized for memory-bound workload.',
+    dt: [
+      ['Workload', 'Memory-bound (15-65% compute)'],
+      ['Tensor Parallel', 'TP=8 (larger for KV memory distribution)'],
+      ['GPU Memory', '0.92 (more space for KV cache)'],
+      ['Input', 'KV cache via NIXL pull']
+    ],
+    links: [
+      ['P/D Disaggregation', 'https://llm-d.ai/docs/guide/Installation/pd-disaggregation'],
+      ['vLLM Disagg', 'https://docs.vllm.ai/en/latest/features/disagg_prefill/']
+    ]
+  }
+};
 
+// Flow definitions
 const flows = {
   'cache-hit': {
-    name: 'Cache Hit Flow',
+    name: 'Cache Hit Flow (Fast Path)',
     steps: [
-      { nodes: ['user'], num: 1, desc: 'Client sends POST /v1/chat/completions' },
-      { nodes: ['user', 'gateway'], num: 2, desc: 'Gateway → Kuadrant Wasm Shim', arrow: true },
-      { nodes: ['gateway', 'epp'], num: 3, desc: 'Gateway → ext_proc (IPP)', arrow: true },
-      { nodes: ['epp', 'kvindex'], num: 4, desc: 'Kuadrant → MaaS API (key validation)', arrow: true },
-      { nodes: ['kvindex'], num: 5, desc: 'MaaS API responds: key valid' },
-      { nodes: ['epp', 'vllmPodA'], num: 6, desc: 'EPP routes to Pod A (highest cache)', arrow: true },
-      { nodes: ['vllmPodA'], num: 7, desc: 'vLLM serves with cached KV' },
-      { nodes: ['vllmPodA', 'gateway'], num: 8, desc: 'Response → Gateway', arrow: true, resp: true },
-      { nodes: ['gateway', 'user'], num: 9, desc: 'Gateway → Client (streaming)', arrow: true, resp: true }
+      { nodes: ['user'], desc: 'User sends POST /v1/completions', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'ext-proc invokes EPP for routing', arrow: true },
+      { nodes: ['epp', 'kvindex'], desc: 'EPP queries KV Cache Index', arrow: true },
+      { nodes: ['kvindex'], desc: 'Returns cache scores: Pod A (85%), Pod B (12%)', highlight: true },
+      { nodes: ['epp'], desc: 'EPP scores: cache=3×85, queue=2×1, util=2×0.6 → Pod A wins' },
+      { nodes: ['epp', 'vllmPodA'], desc: 'Routes to Pod A (highest score)', arrow: true },
+      { nodes: ['vllmPodA'], desc: 'Serves with 85% cached KV (fast TTFT)', highlight: true },
+      { nodes: ['vllmPodA', 'response'], desc: 'Streams tokens to client', arrow: true, resp: true }
     ]
   },
   'cache-miss': {
-    name: 'Cache Miss Flow',
+    name: 'Cache Miss Flow (Cold Start)',
     steps: [
-      { nodes: ['user'], num: 1, desc: 'Client sends request (new prompt)' },
-      { nodes: ['user', 'gateway'], num: 2, desc: 'Gateway receives request', arrow: true },
-      { nodes: ['gateway', 'epp'], num: 3, desc: 'Gateway → ext_proc', arrow: true },
-      { nodes: ['epp', 'kvindex'], num: 4, desc: 'EPP queries KV index', arrow: true },
-      { nodes: ['kvindex'], num: 5, desc: 'Returns low cache scores' },
-      { nodes: ['epp', 'vllmPodA'], num: 6, desc: 'Routes to least-loaded pod', arrow: true },
-      { nodes: ['vllmPodA'], num: 7, desc: 'Full prefill required' },
-      { nodes: ['vllmPodA', 'gateway'], num: 8, desc: 'Response → Gateway', arrow: true, resp: true },
-      { nodes: ['gateway', 'user'], num: 9, desc: 'Gateway → Client', arrow: true, resp: true }
+      { nodes: ['user'], desc: 'User sends POST /v1/completions (new prompt)', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'ext-proc invokes EPP for routing', arrow: true },
+      { nodes: ['epp', 'kvindex'], desc: 'EPP queries KV Cache Index', arrow: true },
+      { nodes: ['kvindex'], desc: 'Returns low cache scores: all pods < 5%', highlight: true },
+      { nodes: ['epp'], desc: 'EPP fallback: routes to least-loaded pod (Pod B)' },
+      { nodes: ['epp', 'vllmPodB'], desc: 'Routes to Pod B (queue depth = 0)', arrow: true },
+      { nodes: ['vllmPodB'], desc: 'Full prefill required (computes entire context)', highlight: true },
+      { nodes: ['vllmPodB', 'kvstore'], desc: 'Publishes BlockStored events to KV index', arrow: true },
+      { nodes: ['vllmPodB', 'response'], desc: 'Streams tokens (higher TTFT)', arrow: true, resp: true }
     ]
   },
   'disaggregated': {
-    name: 'Disaggregated Serving',
+    name: 'Disaggregated Serving (P/D Split)',
     steps: [
-      { nodes: ['user'], num: 1, desc: 'Client sends request' },
-      { nodes: ['user', 'gateway'], num: 2, desc: 'Gateway receives', arrow: true },
-      { nodes: ['gateway', 'epp'], num: 3, desc: 'Gateway → EPP', arrow: true },
-      { nodes: ['epp', 'vllmPodB'], num: 4, desc: 'EPP → Prefill Pod', arrow: true },
-      { nodes: ['vllmPodB'], num: 5, desc: 'Computes KV cache' },
-      { nodes: ['vllmPodB', 'nixl'], num: 6, desc: 'KVXfer metadata', arrow: true },
-      { nodes: ['nixl', 'vllmPodA'], num: 7, desc: 'KV transferred to decode', arrow: true },
-      { nodes: ['vllmPodA'], num: 8, desc: 'Decode generates tokens' },
-      { nodes: ['vllmPodA', 'gateway'], num: 9, desc: 'Response → Gateway', arrow: true, resp: true },
-      { nodes: ['gateway', 'user'], num: 10, desc: 'Gateway → Client', arrow: true, resp: true }
+      { nodes: ['user'], desc: 'User sends POST /v1/completions (long prompt)', req: true },
+      { nodes: ['user', 'gateway'], desc: 'Gateway receives request', arrow: true },
+      { nodes: ['gateway', 'extproc'], desc: 'Envoy calls ext-proc via gRPC', arrow: true },
+      { nodes: ['extproc', 'epp'], desc: 'EPP determines prefill pool routing', arrow: true },
+      { nodes: ['epp', 'prefillPool'], desc: 'Routes to prefill pool (TP=2, compute-optimized)', arrow: true },
+      { nodes: ['prefillPool'], desc: 'Computes KV cache (prefill phase)', highlight: true },
+      { nodes: ['prefillPool', 'nixl'], desc: 'Returns KVXfer metadata to sidecar', arrow: true },
+      { nodes: ['nixl'], desc: 'GPU-to-GPU RDMA transfer via UCX/InfiniBand', highlight: true },
+      { nodes: ['nixl', 'decodePool'], desc: 'KV cache pulled by decode pool', arrow: true },
+      { nodes: ['decodePool'], desc: 'Autoregressive decode (TP=8, memory-optimized)', highlight: true },
+      { nodes: ['decodePool', 'response'], desc: 'Streams tokens (optimized throughput)', arrow: true, resp: true }
     ]
   }
 };
@@ -215,7 +381,7 @@ function resize() {
   const panelW = 380;
   W = canvas.width = window.innerWidth - panelW;
   H = canvas.height = window.innerHeight;
-  sc = Math.min(W / LW, H / LH) * 0.92;
+  sc = Math.min(W / LW, H / LH) * 0.95;
   ox = (W - LW * sc) / 2;
   draw();
 }
@@ -226,7 +392,7 @@ function C() {
     : { bg:'#fff', box:'#f6f8fa', bdr:'#d0d7de', txt:'#24292f', dim:'#656d76' };
 }
 
-function drawNode(key, active) {
+function drawNode(key, active, highlight) {
   const n = N[key];
   const c = C();
 
@@ -238,111 +404,108 @@ function drawNode(key, active) {
     ctx.setLineDash([]);
     if (n.label) {
       ctx.fillStyle = c.dim;
-      ctx.font = `${ts(13)}px sans-serif`;
+      ctx.font = `${ts(14)}px sans-serif`;
       ctx.textAlign = 'left';
       ctx.fillText(n.label, tx(n.x + 10), ty(n.y - 8));
     }
     return;
   }
 
-  if (n.type === 'container') {
-    ctx.strokeStyle = n.color || c.bdr;
-    ctx.setLineDash([6, 4]);
-    ctx.lineWidth = 2;
-    ctx.strokeRect(tx(n.x), ty(n.y), ts(n.w), ts(n.h));
-    ctx.setLineDash([]);
-    if (n.label) {
-      ctx.fillStyle = n.color || c.dim;
-      ctx.font = `${ts(14)}px sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.fillText(n.label, tx(n.x + 12), ty(n.y - 8));
-    }
-    return;
-  }
-
   ctx.save();
-  ctx.globalAlpha = active ? 1 : 0.35;
+  ctx.globalAlpha = active ? 1 : 0.4;
 
   const x = tx(n.x), y = ty(n.y), w = ts(n.w), h = ts(n.h), r = ts(8);
 
-  ctx.fillStyle = n.color || '#d2a8ff';
+  // Fill
+  ctx.fillStyle = n.color || '#a78bfa';
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 
-  if (active) {
-    ctx.strokeStyle = n.color || '#d2a8ff';
+  // Border
+  if (highlight || key === highlightKey) {
+    ctx.strokeStyle = n.color || '#a78bfa';
+    ctx.lineWidth = ts(3);
+    ctx.shadowBlur = ts(20);
+    ctx.shadowColor = n.color || '#a78bfa';
+  } else if (active) {
+    ctx.strokeStyle = n.color || '#a78bfa';
     ctx.lineWidth = ts(2);
-    ctx.stroke();
+  } else {
+    ctx.strokeStyle = c.bdr;
+    ctx.lineWidth = ts(1);
   }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
+  // Text
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const fontSize = n.fs || 18;
+  const fontSize = n.fs || 16;
   ctx.font = `bold ${ts(fontSize)}px sans-serif`;
-  const cy = n.sublabel ? y + h/2 - ts(9) : y + h/2;
+  const cy = n.sublabel ? y + h/2 - ts(10) : y + h/2;
   ctx.fillText(n.label, x + w/2, cy);
 
   if (n.sublabel) {
-    ctx.font = `${ts(fontSize * 0.7)}px sans-serif`;
+    ctx.font = `${ts(fontSize * 0.75)}px sans-serif`;
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillText(n.sublabel, x + w/2, cy + ts(16));
+    ctx.fillText(n.sublabel, x + w/2, cy + ts(18));
   }
 
   ctx.restore();
 }
 
-function drawArrow(fromKey, toKey, stepNum, isResponse = false) {
+function drawArrow(fromKey, toKey) {
   const from = N[fromKey], to = N[toKey];
+  const c = C();
 
-  ctx.save();
-  const x1 = from.x + from.w/2;
-  const y1 = isResponse ? from.y : from.y + from.h;
-  const x2 = to.x + to.w/2;
-  const y2 = isResponse ? to.y + to.h : to.y;
+  let x1, y1, x2, y2;
 
-  // Connection dot
-  ctx.fillStyle = isResponse ? '#3fb950' : '#58a6ff';
-  ctx.beginPath();
-  ctx.arc(tx(x1), ty(y1), ts(7), 0, Math.PI * 2);
-  ctx.fill();
+  const fc = { x: from.x + from.w/2, y: from.y + from.h/2 };
+  const tc = { x: to.x + to.w/2, y: to.y + to.h/2 };
+  const dx = tc.x - fc.x, dy = tc.y - fc.y;
 
-  // Step number
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${ts(11)}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(stepNum, tx(x1), ty(y1));
+  if (Math.abs(dx) > Math.abs(dy)) {
+    // Horizontal
+    if (dx > 0) {
+      x1 = from.x + from.w; y1 = fc.y;
+      x2 = to.x; y2 = tc.y;
+    } else {
+      x1 = from.x; y1 = fc.y;
+      x2 = to.x + to.w; y2 = tc.y;
+    }
+  } else {
+    // Vertical
+    if (dy > 0) {
+      x1 = fc.x; y1 = from.y + from.h;
+      x2 = tc.x; y2 = to.y;
+    } else {
+      x1 = fc.x; y1 = from.y;
+      x2 = tc.x; y2 = to.y + to.h;
+    }
+  }
 
-  // Arrow line
-  ctx.strokeStyle = isResponse ? '#3fb950' : '#a78bfa';
+  ctx.strokeStyle = isDark ? '#a78bfa' : '#8250df';
+  ctx.fillStyle = isDark ? '#a78bfa' : '#8250df';
   ctx.lineWidth = ts(3);
+  ctx.shadowBlur = ts(8);
+  ctx.shadowColor = isDark ? '#a78bfa44' : '#825' + '0df44';
+
   ctx.beginPath();
   ctx.moveTo(tx(x1), ty(y1));
-
-  const dx = Math.abs(x2 - x1);
-  if (dx > 80) {
-    const mid = (y1 + y2) / 2;
-    ctx.lineTo(tx(x1), ty(mid));
-    ctx.lineTo(tx(x2), ty(mid));
-    ctx.lineTo(tx(x2), ty(y2));
-  } else {
-    ctx.lineTo(tx(x2), ty(y2));
-  }
+  ctx.lineTo(tx(x2), ty(y2));
   ctx.stroke();
 
   // Arrowhead
-  ctx.fillStyle = isResponse ? '#3fb950' : '#a78bfa';
-  const dir = isResponse ? 1 : -1;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const size = ts(12);
   ctx.beginPath();
   ctx.moveTo(tx(x2), ty(y2));
-  ctx.lineTo(tx(x2 - 8), ty(y2 + dir * 12));
-  ctx.lineTo(tx(x2 + 8), ty(y2 + dir * 12));
+  ctx.lineTo(tx(x2 - size * Math.cos(angle - Math.PI/6)), ty(y2 - size * Math.sin(angle - Math.PI/6)));
+  ctx.lineTo(tx(x2 - size * Math.cos(angle + Math.PI/6)), ty(y2 - size * Math.sin(angle + Math.PI/6)));
   ctx.closePath();
   ctx.fill();
-
-  ctx.restore();
 }
 
 function draw() {
@@ -353,30 +516,39 @@ function draw() {
   const flow = flows[currentFlow];
   const activeNodes = new Set();
   const arrows = [];
+  let highlightNodes = new Set();
 
   for (let i = 0; i <= stepIdx; i++) {
     const step = flow.steps[i];
     step.nodes.forEach(n => activeNodes.add(n));
     if (step.arrow && step.nodes.length === 2) {
-      arrows.push({ from: step.nodes[0], to: step.nodes[1], num: step.num, resp: step.resp });
+      arrows.push([step.nodes[0], step.nodes[1]]);
+    }
+    if (i === stepIdx && step.highlight) {
+      step.nodes.forEach(n => highlightNodes.add(n));
     }
   }
 
-  ['cluster', 'llmdGateway', 'eppContainer', 'pool'].forEach(key => {
-    if (N[key]) drawNode(key, true);
+  // Draw boundaries first
+  ['cluster', 'poolBoundary'].forEach(key => {
+    if (N[key]) drawNode(key, true, false);
   });
 
+  // Draw nodes
   Object.keys(N).forEach(key => {
-    if (!N[key].type || N[key].type === 'icon') {
-      drawNode(key, activeNodes.has(key));
+    if (N[key].type !== 'boundary') {
+      drawNode(key, activeNodes.has(key), highlightNodes.has(key));
     }
   });
 
-  arrows.forEach(({ from, to, num, resp }) => drawArrow(from, to, num, resp));
+  // Draw arrows
+  arrows.forEach(([from, to]) => drawArrow(from, to));
 }
 
 function updateUI() {
   const flow = flows[currentFlow];
+
+  // Update steps list
   const stepsList = document.getElementById('stepsList');
   stepsList.innerHTML = '';
   flow.steps.forEach((step, i) => {
@@ -387,8 +559,35 @@ function updateUI() {
     stepsList.appendChild(div);
   });
 
+  // Update inspector
   const inspector = document.getElementById('inspector');
-  inspector.innerHTML = '<div class="insp-sec">Step ' + (stepIdx + 1) + ':</div><div class="insp-line">' + flow.steps[stepIdx].desc + '</div>';
+  const step = flow.steps[stepIdx];
+  let html = '';
+
+  if (step.req) {
+    html += '<div class="insp-sec">Request Headers:</div>';
+    html += '<div class="insp-line">POST /v1/completions HTTP/2</div>';
+    html += '<div class="insp-line">Host: llm-d-gateway.cluster.local</div>';
+    html += '<div class="insp-line">Content-Type: application/json</div>';
+    html += '<div class="insp-sec">Body:</div>';
+    html += '<div class="insp-line">{"model": "llama-3.1-70b",</div>';
+    html += '<div class="insp-line"> "messages": [{"role": "user", "content": "..."}],</div>';
+    html += '<div class="insp-line"> "max_tokens": 100}</div>';
+  } else if (step.resp) {
+    html += '<div class="insp-sec">Response:</div>';
+    html += '<div class="insp-line">HTTP/2 200 OK</div>';
+    html += '<div class="insp-line">Content-Type: text/event-stream</div>';
+    html += '<div class="insp-sec">Body (streaming):</div>';
+    html += '<div class="insp-line">data: {"choices": [{"delta": {"content": "..."}}]}</div>';
+  } else {
+    html += `<div class="insp-sec">Step ${stepIdx + 1}:</div>`;
+    html += `<div class="insp-line">${step.desc}</div>`;
+    if (step.nodes.length === 1 && tips[step.nodes[0]]) {
+      html += `<div style="margin-top:8px;font-size:11px;color:#8b949e">Click "${N[step.nodes[0]].label}" for details</div>`;
+    }
+  }
+
+  inspector.innerHTML = html;
   draw();
 }
 
@@ -437,10 +636,110 @@ function toggleTheme() {
   draw();
 }
 
-function closeOverlay() {}
+let overlayWasRunning = false;
+function showOverlay(key) {
+  const tip = tips[key], n = N[key];
+  if (!tip) return;
 
-canvas.addEventListener('click', e => {});
-canvas.addEventListener('mousemove', e => {});
+  overlayWasRunning = running;
+  highlightKey = key;
+  if (running) {
+    running = false;
+    clearTimeout(stepTimer);
+    document.getElementById('playBtn').textContent = '▶ Play';
+  }
+
+  const ov = document.getElementById('overlay');
+  const card = document.getElementById('overlay-card');
+  document.getElementById('overlay-accent').style.background = n.color || '#a78bfa';
+  document.getElementById('overlay-title').textContent = tip.t;
+  document.getElementById('overlay-title').style.color = n.color || '#c9d1d9';
+  document.getElementById('overlay-desc').textContent = tip.d;
+
+  let dh = '';
+  if (tip.dt) {
+    tip.dt.forEach(([l,v]) => {
+      dh += `<div style="display:flex;gap:12px;padding:5px 0;border-bottom:1px solid #21262d"><span style="color:#8b949e;min-width:110px;flex-shrink:0">${l}</span><span style="color:#c9d1d9">${v}</span></div>`;
+    });
+  }
+  if (tip.links) {
+    dh += '<div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">';
+    tip.links.forEach(([l,u]) => {
+      dh += `<a href="${u}" target="_blank" style="color:#a78bfa;font-size:12px;text-decoration:none;padding:4px 10px;border:1px solid #30363d;border-radius:6px;transition:all .15s" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='#30363d'">${l} ↗</a>`;
+    });
+    dh += '</div>';
+  }
+  document.getElementById('overlay-details').innerHTML = dh;
+  document.getElementById('overlay-resume').style.display = overlayWasRunning ? 'block' : 'none';
+
+  const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+  let cx = nx + nw + 20;
+  if (cx + 440 > W) cx = Math.max(10, nx - 440);
+  const cy = Math.max(10, Math.min(ny, H - 500));
+  card.style.left = cx + 'px';
+  card.style.top = cy + 'px';
+  ov.style.display = 'block';
+
+  const hb = document.getElementById('highlight-box');
+  hb.style.left = nx + 'px';
+  hb.style.top = ny + 'px';
+  hb.style.width = nw + 'px';
+  hb.style.height = nh + 'px';
+  hb.style.border = `3px solid ${n.color || '#a78bfa'}`;
+  hb.style.boxShadow = `0 0 30px ${n.color || '#a78bfa'}88`;
+  hb.style.background = isDark ? '#161b22' : '#f6f8fa';
+  hb.style.display = 'block';
+
+  draw();
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('highlight-box').style.display = 'none';
+  highlightKey = null;
+  draw();
+  if (overlayWasRunning) {
+    running = true;
+    document.getElementById('playBtn').textContent = '❚❚ Pause';
+    animate();
+  }
+}
+
+// Click handler
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  for (const [key, n] of Object.entries(N)) {
+    if (n.type === 'boundary') continue;
+    const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+    if (mx >= nx && mx <= nx + nw && my >= ny && my <= ny + nh) {
+      if (tips[key]) {
+        showOverlay(key);
+        break;
+      }
+    }
+  }
+});
+
+// Hover cursor
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let found = false;
+
+  for (const [key, n] of Object.entries(N)) {
+    if (n.type === 'boundary') continue;
+    const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+    if (mx >= nx && mx <= nx + nw && my >= ny && my <= ny + nh && tips[key]) {
+      found = true;
+      break;
+    }
+  }
+  canvas.style.cursor = found ? 'pointer' : 'default';
+});
 
 window.addEventListener('resize', resize);
 resize();
