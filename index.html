@@ -316,8 +316,8 @@
         const stepsList = document.getElementById('steps-list');
 
         // Set canvas size
-        canvas.width = 1200;
-        canvas.height = 900;
+        canvas.width = 1400;
+        canvas.height = 950;
 
         let currentFlow = 'cache-hit';
         let currentStep = 0;
@@ -326,20 +326,31 @@
         let playTimer = null;
         let isDark = true;
 
-        // Node definitions
+        // Node definitions with better layout (center flow at x=600)
         const N = {
-            client: { x: 100, y: 50, w: 120, h: 60, label: 'User/Client', type: 'external' },
-            gateway: { x: 100, y: 180, w: 180, h: 80, label: 'Gateway API\n(Istio/Envoy)', type: 'gateway' },
-            extproc: { x: 100, y: 320, w: 180, h: 70, label: 'Envoy ext-proc', type: 'plugin' },
-            epp: { x: 400, y: 320, w: 160, h: 70, label: 'EPP\n(Endpoint Picker)', type: 'core' },
-            kvindex: { x: 700, y: 250, w: 180, h: 80, label: 'KV Cache Index', type: 'storage' },
-            vllmPodA: { x: 400, y: 520, w: 160, h: 80, label: 'vLLM Pod A\n(High cache hit)', type: 'inference' },
-            vllmPodB: { x: 650, y: 520, w: 160, h: 80, label: 'vLLM Pod B\n(Least loaded)', type: 'inference' },
-            kvstore: { x: 900, y: 520, w: 160, h: 80, label: 'KV Cache Store', type: 'storage' },
-            prefillPool: { x: 400, y: 520, w: 180, h: 80, label: 'Prefill Pool\n(vLLM)', type: 'inference' },
-            nixl: { x: 650, y: 580, w: 140, h: 60, label: 'NIXL Transfer\n(GPU-to-GPU)', type: 'network' },
-            decodePool: { x: 900, y: 520, w: 180, h: 80, label: 'Decode Pool\n(vLLM)', type: 'inference' },
-            response: { x: 100, y: 720, w: 120, h: 60, label: 'Response', type: 'external' },
+            // Common nodes (all flows)
+            client: { x: 600, y: 50, w: 140, h: 60, label: 'User/Client', type: 'external' },
+            gateway: { x: 600, y: 160, w: 200, h: 80, label: 'Gateway API\n(Istio/Envoy)', type: 'gateway' },
+            extproc: { x: 600, y: 290, w: 200, h: 70, label: 'Envoy ext-proc', type: 'plugin' },
+            epp: { x: 600, y: 410, w: 180, h: 70, label: 'EPP\n(Endpoint Picker)', type: 'core' },
+
+            // Cache-aware nodes (shared by cache-hit and cache-miss)
+            kvindex: { x: 850, y: 410, w: 200, h: 70, label: 'KV Cache Index', type: 'storage' },
+
+            // Cache hit flow - Pod A on left
+            vllmPodA: { x: 450, y: 540, w: 180, h: 80, label: 'vLLM Pod A\n(High cache hit)', type: 'inference' },
+
+            // Cache miss flow - Pod B on right with KV store
+            vllmPodB: { x: 750, y: 540, w: 180, h: 80, label: 'vLLM Pod B\n(Least loaded)', type: 'inference' },
+            kvstore: { x: 950, y: 640, w: 180, h: 70, label: 'KV Cache Store', type: 'storage' },
+
+            // Disaggregated flow - horizontal layout
+            prefillPool: { x: 350, y: 540, w: 200, h: 80, label: 'Prefill Pool\n(vLLM)', type: 'inference' },
+            nixl: { x: 600, y: 670, w: 160, h: 60, label: 'NIXL Transfer\n(GPU-to-GPU)', type: 'network' },
+            decodePool: { x: 850, y: 540, w: 200, h: 80, label: 'Decode Pool\n(vLLM)', type: 'inference' },
+
+            // Response (all flows)
+            response: { x: 600, y: 800, w: 140, h: 60, label: 'Response', type: 'external' },
         };
 
         // Flow definitions
@@ -462,20 +473,68 @@
             ctx.fillStyle = getColor('arrow');
             ctx.lineWidth = 3;
 
-            const fromX = from.x + from.w / 2;
-            const fromY = from.y + from.h;
-            const toX = to.x + to.w / 2;
-            const toY = to.y;
+            // Calculate best connection points
+            let fromX, fromY, toX, toY;
 
-            // Draw line
+            const fromCenterX = from.x + from.w / 2;
+            const fromCenterY = from.y + from.h / 2;
+            const toCenterX = to.x + to.w / 2;
+            const toCenterY = to.y + to.h / 2;
+
+            const dx = toCenterX - fromCenterX;
+            const dy = toCenterY - fromCenterY;
+
+            // Determine connection points based on relative positions
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontal flow
+                if (dx > 0) {
+                    // From left to right
+                    fromX = from.x + from.w;
+                    fromY = fromCenterY;
+                    toX = to.x;
+                    toY = toCenterY;
+                } else {
+                    // From right to left
+                    fromX = from.x;
+                    fromY = fromCenterY;
+                    toX = to.x + to.w;
+                    toY = toCenterY;
+                }
+            } else {
+                // Vertical flow
+                if (dy > 0) {
+                    // From top to bottom
+                    fromX = fromCenterX;
+                    fromY = from.y + from.h;
+                    toX = toCenterX;
+                    toY = to.y;
+                } else {
+                    // From bottom to top
+                    fromX = fromCenterX;
+                    fromY = from.y;
+                    toX = toCenterX;
+                    toY = to.y + to.h;
+                }
+            }
+
+            // Draw line with curve for non-straight paths
             ctx.beginPath();
             ctx.moveTo(fromX, fromY);
-            ctx.lineTo(toX, toY);
+
+            if (Math.abs(dx) > 20 && Math.abs(dy) > 20) {
+                // Curved path for diagonal connections
+                const midX = (fromX + toX) / 2;
+                const midY = (fromY + toY) / 2;
+                ctx.quadraticCurveTo(midX, midY, toX, toY);
+            } else {
+                // Straight line
+                ctx.lineTo(toX, toY);
+            }
             ctx.stroke();
 
             // Draw arrowhead
             const angle = Math.atan2(toY - fromY, toX - fromX);
-            const arrowSize = 10;
+            const arrowSize = 12;
             ctx.beginPath();
             ctx.moveTo(toX, toY);
             ctx.lineTo(
