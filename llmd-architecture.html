@@ -61,13 +61,13 @@ body.light .legend{background:#f6f8fa;border-color:#d0d7de}
 .legend-item{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
 .legend-dot{width:11px;height:11px;border-radius:50%}
 
-.modal-backdrop{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center}
-.modal-backdrop.show{display:flex}
-.modal{background:var(--bg2,#161b22);border:1px solid var(--border,#30363d);border-radius:16px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.modal-title{font-size:20px;font-weight:700;margin-bottom:4px}
-.modal-sub{font-size:13px;color:#8b949e;margin-bottom:20px}
-.modal-close{float:right;background:none;border:none;color:#8b949e;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}
+#highlight-box{display:none;position:fixed;z-index:350;border-radius:10px;pointer-events:none}
+#overlay{display:none;position:fixed;top:0;left:0;right:380px;bottom:0;z-index:300;background:rgba(0,0,0,0.6)}
+.overlay-card{position:absolute;background:#161b22ee;border:1px solid #30363d;border-radius:14px;max-width:420px;padding:22px 26px;box-shadow:0 12px 40px rgba(0,0,0,0.5);transition:opacity .2s}
+.modal-close{position:absolute;top:10px;right:14px;background:none;border:none;color:#8b949e;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all .15s}
 .modal-close:hover{color:#c9d1d9;background:#30363d}
+.modal-title{margin:0 0 6px;font-size:18px;color:#c9d1d9;font-family:system-ui}
+.modal-sub{margin:0 0 14px;font-size:13px;color:#8b949e;line-height:1.5;font-family:system-ui}
 .modal-detail{margin:10px 0;padding:10px;background:#0d1117;border-radius:8px;font-size:13px;line-height:1.6}
 .modal-detail strong{color:#58a6ff}
 
@@ -103,6 +103,18 @@ body.light .legend{background:#f6f8fa;border-color:#d0d7de}
   </div>
 </div>
 
+<div id="highlight-box"></div>
+<div id="overlay" onclick="if(event.target===this)closeOverlay()">
+  <div class="overlay-card" id="overlay-card">
+    <button class="modal-close" onclick="closeOverlay()">✕</button>
+    <div id="overlay-accent" style="width:4px;height:24px;border-radius:2px;position:absolute;left:0;top:22px"></div>
+    <h2 id="overlay-title" class="modal-title"></h2>
+    <p id="overlay-sub" class="modal-sub"></p>
+    <div id="overlay-details"></div>
+    <button onclick="closeOverlay()" style="margin-top:14px;padding:7px 20px;border:1px solid #3fb950;border-radius:8px;background:transparent;color:#3fb950;font-size:13px;cursor:pointer;font-family:system-ui;transition:all .15s" onmouseover="this.style.background='#3fb95022'" onmouseout="this.style.background='transparent'">▶ Resume Flow</button>
+  </div>
+</div>
+
 <div class="legend">
   <div class="legend-title">Legend</div>
   <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>Request</div>
@@ -112,27 +124,18 @@ body.light .legend{background:#f6f8fa;border-color:#d0d7de}
   <div style="margin-top:10px;padding-top:8px;border-top:1px solid #30363d;font-size:11px;color:#484f58">Click components for details</div>
 </div>
 
-<div id="modal-backdrop" class="modal-backdrop" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal()">×</button>
-    <div id="modal-title" class="modal-title"></div>
-    <div id="modal-sub" class="modal-sub"></div>
-    <div id="modal-content"></div>
-  </div>
-</div>
-
 <canvas id="canvas"></canvas>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 let W, H, isDark = true, animFrame = null, dots = [], activeNodes = new Set();
-let badges = {}, lines = [], running = false, fading = {};
+let badges = {}, lines = [], running = false, fading = {}, glowing = new Set();
 let paused = false, runStepIndex = 0, stepTimer = null, playbackSpeed = 1;
 let inspHeaders = [], inspBody = [], inspMeta = [], inspStepLabel = '';
-let snapshots = [];
+let snapshots = [], highlightKey = null, overlayWasRunning = false;
 
-const LW = 1400, LH = 950;
+const LW = 1350, LH = 1000;
 let ox = 0, oy = 0, sc = 1;
 
 function toggleTheme() {
@@ -142,65 +145,109 @@ function toggleTheme() {
   draw();
 }
 
-// NODES - Updated to match real LLM-D architecture
+// NODES - Data plane architecture (request path)
 const N = {
-  client: { x: 80, y: 120, w: 120, h: 60, label: 'Client', type: 'box' },
+  // Top row - all aligned at y=110
+  user: { x: 60, y: 110, w: 100, h: 70, label: 'Client / Agent', type: 'icon' },
+  gateway: { x: 240, y: 110, w: 450, h: 80, label: 'Gateway API', sublabel: 'Istio/Envoy', color: '#58a6ff', fs: 20 },
 
-  gateway: { x: 320, y: 100, w: 220, h: 80, label: 'Gateway API', sublabel: 'Istio/Envoy', color: '#58a6ff', fs: 17 },
+  // Kubernetes cluster boundary
+  cluster: { x: 180, y: 60, w: 1140, h: 920, type: 'boundary' },
 
-  router: { x: 660, y: 100, w: 200, h: 80, label: 'llm-d Router', sublabel: 'KV Cache Aware', color: '#79c0ff', fs: 16 },
+  // llm-d Router (data plane) - y=240
+  router_box: { x: 200, y: 240, w: 520, h: 160, type: 'container', label: 'llm-d Router', color: '#79c0ff' },
+  epp: { x: 220, y: 270, w: 230, h: 60, label: 'Endpoint Picker', sublabel: 'EPP (ext_proc)', color: '#79c0ff', fs: 14, inner: true },
+  routing_policy: { x: 220, y: 340, w: 230, h: 50, label: 'Routing Policy', sublabel: 'KV-Cache Aware', color: '#8b949e', fs: 13, inner: true },
+  autoscaler: { x: 470, y: 270, w: 230, h: 120, label: 'Workload Variant\nAutoscaler', sublabel: 'Queue-Based', color: '#e3b341', fs: 12, inner: true },
 
-  kserve: { x: 1020, y: 100, w: 180, h: 80, label: 'KServe', sublabel: 'LLMInferenceService', color: '#8b949e', fs: 15 },
+  // InferencePool (data plane) - horizontal layout
+  inferencepool_box: { x: 200, y: 450, w: 880, h: 380, type: 'container', label: 'InferencePool', color: '#d2a8ff' },
 
-  scheduler: { x: 660, y: 250, w: 200, h: 70, label: 'llm-d Scheduler', sublabel: 'GPU Topology Aware', color: '#e3b341', fs: 14 },
+  // Row 1 inside InferencePool: Sidecar - y=485
+  sidecar: { x: 440, y: 485, w: 200, h: 60, label: 'Sidecar', sublabel: 'P/D Coordinator', color: '#8b949e', fs: 14, inner: true },
 
-  lws: { x: 420, y: 400, w: 240, h: 80, label: 'LeaderWorkerSet', sublabel: 'Leader + Workers', color: '#8b949e', fs: 16 },
+  // Row 2 inside InferencePool: Decode, NIXL, Prefill - all aligned at y=575
+  decode: { x: 220, y: 575, w: 240, h: 90, label: 'vLLM Decode', sublabel: 'Pod A (L4/T4)', color: '#79c0ff', fs: 15, inner: true },
+  nixl: { x: 490, y: 575, w: 200, h: 90, label: 'NIXL', sublabel: 'KV Transfer', color: '#8b949e', fs: 14, inner: true },
+  prefill: { x: 720, y: 575, w: 240, h: 90, label: 'vLLM Prefill', sublabel: 'Pod B (A100)', color: '#d2a8ff', fs: 15, inner: true },
 
-  prefill: { x: 200, y: 550, w: 220, h: 90, label: 'Prefill Pod', sublabel: 'Compute-Intensive', color: '#d2a8ff', fs: 17 },
+  // Row 3 inside InferencePool: KV Cache Store - y=695
+  kvcache: { x: 220, y: 695, w: 240, h: 60, label: 'KV Cache Store', sublabel: 'Shared PVC', color: '#8b949e', fs: 13, inner: true },
 
-  kvcache: { x: 520, y: 700, w: 200, h: 60, label: 'KV Cache Store', sublabel: 'Shared Storage', color: '#8b949e', fs: 15 },
+  // Row 3 inside InferencePool: Unified replicas - aligned at y=695
+  unified: { x: 520, y: 695, w: 200, h: 80, label: 'Unified vLLM', sublabel: 'Pod 1 (TP=8)', color: '#58a6ff', fs: 14, inner: true },
+  unified2: { x: 760, y: 695, w: 200, h: 80, label: 'Unified vLLM', sublabel: 'Pod 2 (TP=8)', color: '#58a6ff', fs: 14, inner: true },
 
-  decode: { x: 900, y: 550, w: 220, h: 90, label: 'Decode Pod', sublabel: 'Memory-Intensive', color: '#79c0ff', fs: 17 },
+  // Row 3 inside InferencePool: Leader - aligned at y=695
+  leader: { x: 440, y: 695, w: 200, h: 60, label: 'Leader', sublabel: 'Ray Head', color: '#d2a8ff', fs: 14, inner: true },
 
-  leader: { x: 200, y: 400, w: 160, h: 70, label: 'Leader Pod', sublabel: '8 GPUs', color: '#d2a8ff', fs: 15 },
-  worker: { x: 520, y: 400, w: 160, h: 70, label: 'Worker Pod', sublabel: '8 GPUs', color: '#79c0ff', fs: 15 },
+  // Row 4 inside InferencePool: Workers - aligned at y=770
+  worker1: { x: 220, y: 770, w: 160, h: 50, label: 'Worker 1', sublabel: 'Shard 1/8', color: '#79c0ff', fs: 12, inner: true },
+  worker2: { x: 400, y: 770, w: 160, h: 50, label: 'Worker 2', sublabel: 'Shard 2/8', color: '#79c0ff', fs: 12, inner: true },
+  worker3: { x: 580, y: 770, w: 160, h: 50, label: 'Worker 3', sublabel: 'Shard 3/8', color: '#79c0ff', fs: 12, inner: true },
+  worker_etc: { x: 760, y: 770, w: 160, h: 50, label: '...', sublabel: 'Shards 4-8', color: '#79c0ff55', fs: 12, inner: true },
 };
 
 const tips = {
-  client: {t:'Client', d:'Application or user sending inference requests via OpenAI-compatible API.'},
-  gateway: {t:'Gateway API (Istio)', d:'Kubernetes Gateway API implementation using Istio/Envoy. Routes requests via HTTPRoute resources to inference services.', det:[['Type','Gateway API'],['Implementation','Istio + Envoy'],['Port','80/443'],['TLS','Managed by cert-manager']]},
-  router: {t:'llm-d Router', d:'Intelligent request router for disaggregated serving. Routes new prompts to prefill pods and follow-up requests to decode pods with KV cache affinity.', det:[['Function','Prefill vs Decode routing'],['Cache Aware','Tracks KV cache locations'],['Load Balancing','Across replicas'],['Component','Optional (disaggregated mode)']]},
-  kserve: {t:'KServe', d:'Kubernetes-native model serving platform. Abstracts LLM deployment complexity via LLMInferenceService CRD.', det:[['CRD','LLMInferenceService'],['Controller','llmisvc-controller'],['Translates To','LeaderWorkerSet + Service + HTTPRoute'],['Version','v0.17.0']]},
-  scheduler: {t:'llm-d Inference Scheduler', d:'Intelligent pod scheduler for distributed LLM inference. GPU topology aware, considers NUMA, PCIe lanes, network bandwidth for optimal placement.', det:[['Type','Kubernetes Scheduler Plugin'],['Aware Of','GPU topology, model affinity, KV cache'],['Decides','Which nodes get leader/workers'],['Version','v0.7.1'],['Project','CNCF Sandbox']]},
-  lws: {t:'LeaderWorkerSet (LWS)', d:'Kubernetes-native primitive for leader+worker pod groups. One pod acts as leader (coordinator), others as workers. Managed as a unit.', det:[['API','leaderworkerset.x-k8s.io/v1'],['Origin','kubernetes-sigs (Google)'],['Env Vars','LWS_LEADER_ADDRESS, LWS_WORKER_INDEX'],['Use Case','Distributed ML inference'],['Replicas','Number of leader+worker groups'],['Size','Pods per group (1 leader + N workers)']]},
-  prefill: {t:'Prefill Pod', d:'Compute-intensive pod that processes the input prompt in parallel and generates the first token plus KV cache. Uses high-FLOPS GPUs (A100).', det:[['Phase','Prompt Processing'],['Output','First token + KV cache'],['GPU Type','A100 (high compute)'],['vLLM Config','--max-model-len 8192'],['Storage','Saves KV cache to shared store'],['Scaling','Based on request rate']]},
-  kvcache: {t:'KV Cache Store', d:'Shared storage for KV cache transfer between prefill and decode pods. Enables cache reuse for follow-up requests in the same conversation.', det:[['Type','Shared PVC or object storage'],['Format','vLLM KV cache tensors'],['Access','Prefill writes, Decode reads'],['Benefit','Avoids recomputing prompt']]},
-  decode: {t:'Decode Pod', d:'Memory-intensive pod that loads KV cache and generates output tokens autoregressively. Uses cheaper, high-memory-bandwidth GPUs (L4/T4).', det:[['Phase','Token Generation'],['Input','KV cache from prefill'],['GPU Type','L4/T4 (memory bandwidth)'],['vLLM Config','--max-model-len 131072 (long context)'],['Autoscaling','Based on queue depth, concurrency'],['Response','Streamed tokens']]},
-  leader: {t:'Leader Pod', d:'Coordinator pod in a LeaderWorkerSet. Runs Ray head, coordinates distributed inference across worker pods via Ray.', det:[['Role','Coordinator'],['Ray','Ray head (port 6379)'],['vLLM','Receives requests, aggregates results'],['GPUs','8 (tensor parallelism shard 1)'],['Workers','Connect via LWS_LEADER_ADDRESS']]},
-  worker: {t:'Worker Pod', d:'Worker pod in a LeaderWorkerSet. Runs Ray worker, connects to leader, computes its model shard. Part of tensor/pipeline parallelism.', det:[['Role','Compute worker'],['Ray','Ray worker (connects to leader:6379)'],['vLLM','Computes model shard'],['GPUs','8 (tensor parallelism shard 2)'],['Discovery','Via LWS_LEADER_ADDRESS env var']]},
+  gateway: {t:'Gateway API (Istio/Envoy)', d:'L7 proxy that accepts user requests. Consults EPP via ext_proc protocol to determine optimal destination.', dt:[['Type','Gateway API'],['Implementation','Istio + Envoy'],['Protocol','HTTP/1.1, HTTP/2, gRPC'],['Port','80/443']]},
+  epp: {t:'Endpoint Picker (EPP)', d:'Routing engine that scores and selects model server pods based on real-time metrics, KV-cache affinity, and configured policies.', dt:[['Type','ext_proc filter'],['Scores Based On','Queue depth, KV-cache hits, latency'],['Output','Selected pod IP'],['Mode','Disaggregated or unified']]},
+  routing_policy: {t:'Routing Policy', d:'Configures routing behavior including KV-cache awareness, prefix cache heuristics, and load balancing strategies.', dt:[['KV-Cache Aware','Routes follow-up requests to same pod'],['Prefix Cache','Maximizes cache hit rate'],['Policies','Round-robin, least-loaded, cache-affinity']]},
+  autoscaler: {t:'Workload Variant Autoscaler', d:'Globally optimized scaling that minimizes cost by routing traffic across different model variants while meeting latency targets.', dt:[['Type','SLO-aware autoscaler'],['Metrics','Queue depth, latency, cost'],['Variants','Different hardware, quantization'],['Version','v0.6.0']]},
+  sidecar: {t:'Sidecar', d:'Coordinates disaggregated serving transaction. Orchestrates KV cache transfer between prefill and decode workers.', dt:[['Role','Transaction coordinator'],['Coordinates','Prefill ↔ Decode'],['Triggers','KVXfer metadata exchange']]},
+  prefill: {t:'vLLM Prefill Pod', d:'Compute-intensive pod that processes input prompt in parallel, generates first token and KV cache. Uses high-FLOPS GPUs.', dt:[['Phase','Prompt Processing'],['Output','First token + KV cache'],['GPU Type','A100 (high compute)'],['Pod','Pod B']]},
+  decode: {t:'vLLM Decode Pod', d:'Memory-intensive pod that loads KV cache and generates output tokens autoregressively. Uses cheaper GPUs with high memory bandwidth.', dt:[['Phase','Token Generation'],['Input','KV cache from prefill'],['GPU Type','L4/T4 (memory bandwidth)'],['Pod','Pod A']]},
+  nixl: {t:'NIXL', d:'NVIDIA Inference Xfer Library. High-speed KV cache transfer between prefill and decode pods over GPU-direct RDMA.', dt:[['Full Name','NVIDIA Inference Xfer Library'],['Transport','GPU-direct RDMA, DCN'],['Direction','Decode pulls from Prefill']]},
+  kvcache: {t:'KV Cache Store', d:'Shared storage for KV cache transfer between prefill and decode pods. Enables cache reuse for follow-up requests.', dt:[['Type','Shared PVC or S3'],['Format','vLLM KV cache tensors'],['Access','Prefill writes, Decode reads']]},
+  unified: {t:'Unified vLLM Pod 1', d:'Single pod that handles both prefill and decode. Uses tensor parallelism across 8 GPUs. Simpler but less cost-optimized than disaggregated.', dt:[['Mode','Prefill + Decode'],['Tensor Parallelism','8-way (8 GPUs)'],['GPU Type','A100 or H100'],['Replica','Pod 1']]},
+  unified2: {t:'Unified vLLM Pod 2', d:'Replica pod for load balancing. EPP selects between available pods based on queue depth and latency metrics.', dt:[['Mode','Prefill + Decode'],['Tensor Parallelism','8-way (8 GPUs)'],['GPU Type','A100 or H100'],['Replica','Pod 2']]},
+  leader: {t:'Leader Pod', d:'Coordinator in LeaderWorkerSet. Runs Ray head, coordinates distributed inference across 8 worker pods with tensor parallelism.', dt:[['Role','Coordinator'],['Ray','Ray head (port 6379)'],['vLLM','Receives requests, aggregates'],['Workers','8 workers (TP=8)']]},
+  worker1: {t:'Worker Pod 1', d:'Worker in LeaderWorkerSet. Computes model shard 1/8. Connects to leader via LWS_LEADER_ADDRESS.', dt:[['Role','Compute worker'],['Ray','Ray worker'],['Model Shard','1/8'],['GPU','8 GPUs per pod']]},
+  worker2: {t:'Worker Pod 2', d:'Worker in LeaderWorkerSet. Computes model shard 2/8. Connects to leader via LWS_LEADER_ADDRESS.', dt:[['Role','Compute worker'],['Ray','Ray worker'],['Model Shard','2/8'],['GPU','8 GPUs per pod']]},
+  worker3: {t:'Worker Pod 3', d:'Worker in LeaderWorkerSet. Computes model shard 3/8. Connects to leader via LWS_LEADER_ADDRESS.', dt:[['Role','Compute worker'],['Ray','Ray worker'],['Model Shard','3/8'],['GPU','8 GPUs per pod']]},
 };
 
-let overlayWasRunning = false;
-function showModal(key) {
-  const tip = tips[key];
+function showOverlay(key) {
+  const tip = tips[key], n = N[key];
   if (!tip) return;
   overlayWasRunning = running;
+  highlightKey = key;
   if (running && !paused) { paused = true; running = false; if (stepTimer) clearTimeout(stepTimer); updatePlayBtn(); }
-  document.getElementById('modal-title').textContent = tip.t;
-  document.getElementById('modal-sub').textContent = tip.d;
-  let html = '';
-  if (tip.det) {
-    html += '<div style="font-size:13px;line-height:1.7">';
-    tip.det.forEach(([k,v]) => {
-      html += `<div class="modal-detail"><strong>${esc(k)}:</strong> ${esc(v)}</div>`;
-    });
-    html += '</div>';
-  }
-  document.getElementById('modal-content').innerHTML = html;
-  document.getElementById('modal-backdrop').classList.add('show');
+  const ov = document.getElementById('overlay');
+  const card = document.getElementById('overlay-card');
+  document.getElementById('overlay-accent').style.background = n.color || '#58a6ff';
+  document.getElementById('overlay-title').textContent = tip.t;
+  document.getElementById('overlay-title').style.color = n.color || '#c9d1d9';
+  document.getElementById('overlay-sub').textContent = tip.d;
+  let dh = '';
+  if (tip.dt) tip.dt.forEach(([l,v]) => { dh += `<div class="modal-detail"><strong>${esc(l)}:</strong> ${esc(v)}</div>`; });
+  document.getElementById('overlay-details').innerHTML = dh;
+  const nx = tx(n.x), ny = ty(n.y), nw = ts(n.w), nh = ts(n.h);
+  const canvasRight = innerWidth - 380;
+  let cx, cy;
+  if (nx + nw + 440 < canvasRight) { cx = nx + nw + 20; } else if (nx - 440 > 0) { cx = nx - 440; } else { cx = Math.max(10, (canvasRight - 420) / 2); }
+  cy = Math.max(10, Math.min(ny - 40, innerHeight - 500));
+  card.style.left = cx + 'px';
+  card.style.top = cy + 'px';
+  ov.style.display = 'block';
+  const hb = document.getElementById('highlight-box');
+  hb.style.left = nx + 'px';
+  hb.style.top = ny + 'px';
+  hb.style.width = nw + 'px';
+  hb.style.height = nh + 'px';
+  hb.style.border = `3px solid ${n.color || '#58a6ff'}`;
+  hb.style.boxShadow = `0 0 30px ${n.color || '#58a6ff'}88, inset 0 0 20px ${n.color || '#58a6ff'}22`;
+  hb.style.background = isDark ? '#161b22' : '#f6f8fa';
+  hb.style.display = 'flex'; hb.style.flexDirection = 'column'; hb.style.alignItems = 'center'; hb.style.justifyContent = 'center';
+  hb.style.fontFamily = 'system-ui'; hb.style.color = isDark ? '#c9d1d9' : '#24292f';
+  hb.innerHTML = `<div style="font-weight:700;font-size:${nw > 150 ? 16 : 13}px">${esc(n.label)}</div>${n.sublabel ? `<div style="font-size:${nw > 150 ? 12 : 10}px;color:#8b949e">${esc(n.sublabel)}</div>` : ''}`;
+  draw();
 }
-function closeModal() {
-  document.getElementById('modal-backdrop').classList.remove('show');
+
+function closeOverlay() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('highlight-box').style.display = 'none';
+  highlightKey = null;
+  draw();
   if (overlayWasRunning) { paused = false; running = true; updatePlayBtn(); if (!animFrame) animate(); stepTimer = setTimeout(execStep, 300 / playbackSpeed); }
 }
 
@@ -216,7 +263,7 @@ function resize() {
   H = canvas.height = innerHeight;
   sc = Math.min(W / LW, H / LH) * 0.95;
   ox = (W - LW * sc) / 2;
-  oy = (H - LH * sc) * 0.08;
+  oy = (H - LH * sc) * 0.05;
   draw();
 }
 addEventListener('resize', resize);
@@ -227,10 +274,31 @@ function ts(s) { return s * sc; }
 
 function drawBox(key) {
   const n = N[key], c = C();
-  if (!n || n.type === 'boundary') return;
+  if (!n || n.type === 'boundary' || n.type === 'container' || n.type === 'label') return;
+
+  // Hide components based on active flow
+  if (activeFlow === 'disaggregated') {
+    if (['unified', 'unified2', 'leader', 'worker1', 'worker2', 'worker3', 'worker_etc'].includes(key)) return;
+  } else if (activeFlow === 'unified') {
+    if (['sidecar', 'decode', 'nixl', 'prefill', 'kvcache', 'leader', 'worker1', 'worker2', 'worker3', 'worker_etc'].includes(key)) return;
+  } else if (activeFlow === 'multinode') {
+    if (['sidecar', 'decode', 'nixl', 'prefill', 'kvcache', 'unified', 'unified2'].includes(key)) return;
+  }
+
   const x = tx(n.x), y = ty(n.y), w = ts(n.w), h = ts(n.h);
   const isA = activeNodes.has(key), hasBadge = badges[key] != null;
   ctx.save();
+
+  if (n.type === 'icon') {
+    ctx.font = `${ts(32)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('\u{1F464}', x + w / 2, y + ts(26));
+    ctx.font = `bold ${ts(16)}px system-ui`;
+    ctx.fillStyle = c.txt;
+    ctx.fillText(n.label, x + w / 2, y + ts(46));
+    ctx.restore();
+    return;
+  }
 
   let fadeA = 1;
   if (fading[key]) {
@@ -240,7 +308,7 @@ function drawBox(key) {
   }
 
   if (isA || hasBadge) {
-    ctx.shadowColor = n.color || '#58a6ff';
+    ctx.shadowColor = n.color;
     ctx.shadowBlur = ts(18) * fadeA;
     ctx.globalAlpha = 0.3 + 0.7 * fadeA;
   }
@@ -249,9 +317,11 @@ function drawBox(key) {
   ctx.roundRect(x, y, w, h, ts(8));
   ctx.fillStyle = (isA || hasBadge) ? c.boxA : c.box;
   ctx.fill();
-  ctx.strokeStyle = (isA || hasBadge) ? (n.color || '#58a6ff') : c.bdr;
+  ctx.strokeStyle = (isA || hasBadge) ? n.color : c.bdr;
   ctx.lineWidth = ts((isA || hasBadge) ? 2.5 : 1.5);
+  if (n.inner) { ctx.setLineDash([ts(5), ts(4)]); }
   ctx.stroke();
+  ctx.setLineDash([]);
 
   const fs = n.fs || 16;
   ctx.fillStyle = c.txt;
@@ -260,13 +330,20 @@ function drawBox(key) {
 
   if (n.sublabel) {
     ctx.font = `bold ${ts(fs)}px system-ui`;
-    ctx.fillText(n.label, x + w / 2, y + h / 2 - ts(9));
-    ctx.font = `${ts(Math.max(fs - 4, 11))}px system-ui`;
+    ctx.fillText(n.label, x + w / 2, y + h / 2 - ts(8));
+    ctx.font = `${ts(Math.max(fs - 3, 11))}px system-ui`;
     ctx.fillStyle = c.dim;
-    ctx.fillText(n.sublabel, x + w / 2, y + h / 2 + ts(9));
+    ctx.fillText(n.sublabel, x + w / 2, y + h / 2 + ts(8));
   } else {
     ctx.font = `bold ${ts(fs)}px system-ui`;
-    ctx.fillText(n.label, x + w / 2, y + h / 2);
+    if (n.label.includes('\n')) {
+      const lines = n.label.split('\n');
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x + w / 2, y + h / 2 - ts(fs/2) + i * ts(fs + 2));
+      });
+    } else {
+      ctx.fillText(n.label, x + w / 2, y + h / 2);
+    }
   }
 
   if (hasBadge) {
@@ -286,50 +363,139 @@ function drawBox(key) {
   ctx.restore();
 }
 
-function edgePt(n, targetX, targetY) {
+function drawContainer(key, isGlow) {
+  const n = N[key], c = C();
+  if (!n || n.type !== 'container') return;
+
+  // Hide containers based on active flow
+  if (activeFlow === 'unified' && key === 'inferencepool_box') {
+    // Show inferencepool_box but relabel it for unified
+    n.label = 'Unified Runtime';
+  } else if (activeFlow === 'disaggregated' && key === 'inferencepool_box') {
+    n.label = 'InferencePool';
+  }
+
+  ctx.save();
+  if (isGlow) { ctx.shadowColor = n.color; ctx.shadowBlur = ts(22); }
+  ctx.beginPath();
+  ctx.roundRect(tx(n.x), ty(n.y), ts(n.w), ts(n.h), ts(10));
+  const a = isGlow ? 'cc' : '55';
+  ctx.strokeStyle = n.color + a;
+  ctx.lineWidth = ts(isGlow ? 3 : 2.5);
+  ctx.setLineDash([ts(7), ts(5)]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = `bold ${ts(12)}px system-ui`;
+  ctx.fillStyle = n.color + (isDark ? 'aa' : '99');
+  ctx.textAlign = 'left';
+  ctx.fillText(n.label, tx(n.x + 12), ty(n.y + 18));
+  ctx.restore();
+}
+
+function drawBounds() {
+  const c = C();
+  // Cluster boundary
+  const cb = N.cluster;
+  ctx.beginPath();
+  ctx.roundRect(tx(cb.x), ty(cb.y), ts(cb.w), ts(cb.h), ts(14));
+  ctx.strokeStyle = c.bdr;
+  ctx.lineWidth = ts(2.5);
+  ctx.setLineDash([ts(10), ts(8)]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = `${ts(13)}px system-ui`;
+  ctx.fillStyle = isDark ? 'rgba(63,185,80,0.6)' : 'rgba(26,127,55,0.6)';
+  ctx.textAlign = 'right';
+  ctx.fillText('kubernetes cluster', tx(cb.x + cb.w - 15), ty(cb.y + 18));
+
+  // Containers (data plane)
+  drawContainer('router_box', glowing.has('router_box'));
+  drawContainer('inferencepool_box', glowing.has('inferencepool_box'));
+}
+
+function edgePt(n, targetX, targetY, offset) {
+  offset = offset || 0;
   const cx_ = n.x + n.w / 2, cy_ = n.y + n.h / 2;
   const dx = targetX - cx_, dy = targetY - cy_;
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return { x: cx_, y: cy_ };
   const hw = n.w / 2, hh = n.h / 2;
   let ex, ey;
   if (Math.abs(dx) * hh > Math.abs(dy) * hw) {
+    // Vertical edge (left or right)
     ex = cx_ + (dx > 0 ? hw : -hw);
     ey = cy_ + dy * (hw / Math.abs(dx));
+    // Apply offset perpendicular to edge (vertical offset)
+    ey += offset;
   } else {
+    // Horizontal edge (top or bottom)
     ey = cy_ + (dy > 0 ? hh : -hh);
     ex = cx_ + dx * (hh / Math.abs(dy));
+    // Apply offset perpendicular to edge (horizontal offset)
+    ex += offset;
   }
   return { x: ex, y: ey };
 }
 
-function drawArrowLine(x1, y1, x2, y2, color, num, alpha) {
+function drawArrowLine(points, color, num, alpha) {
   ctx.save();
   ctx.globalAlpha = alpha || 1;
+  // Draw path
   ctx.beginPath();
-  ctx.moveTo(tx(x1), ty(y1));
-  ctx.lineTo(tx(x2), ty(y2));
+  ctx.moveTo(tx(points[0].x), ty(points[0].y));
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(tx(points[i].x), ty(points[i].y));
+  }
   ctx.strokeStyle = color;
   ctx.lineWidth = ts(2.5);
   ctx.stroke();
-  const ang = Math.atan2(y2 - y1, x2 - x1), sz = ts(10);
+  // Draw arrowhead at end
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  const ang = Math.atan2(last.y - prev.y, last.x - prev.x), sz = ts(10);
   ctx.beginPath();
-  ctx.moveTo(tx(x2), ty(y2));
-  ctx.lineTo(tx(x2) - sz * Math.cos(ang - 0.4), ty(y2) - sz * Math.sin(ang - 0.4));
-  ctx.lineTo(tx(x2) - sz * Math.cos(ang + 0.4), ty(y2) - sz * Math.sin(ang + 0.4));
+  ctx.moveTo(tx(last.x), ty(last.y));
+  ctx.lineTo(tx(last.x) - sz * Math.cos(ang - 0.4), ty(last.y) - sz * Math.sin(ang - 0.4));
+  ctx.lineTo(tx(last.x) - sz * Math.cos(ang + 0.4), ty(last.y) - sz * Math.sin(ang + 0.4));
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
+  // Draw number badge - calculate better position
   if (num != null) {
-    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, r = ts(12);
+    // Find point 40% along the path for better badge placement
+    let totalLen = 0;
+    const segLens = [];
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x;
+      const dy = points[i].y - points[i - 1].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      segLens.push(len);
+      totalLen += len;
+    }
+    const targetDist = totalLen * 0.4;
+    let accum = 0;
+    let badgePos = points[0];
+    for (let i = 0; i < segLens.length; i++) {
+      if (accum + segLens[i] >= targetDist) {
+        const segT = (targetDist - accum) / segLens[i];
+        badgePos = {
+          x: points[i].x + (points[i + 1].x - points[i].x) * segT,
+          y: points[i].y + (points[i + 1].y - points[i].y) * segT
+        };
+        break;
+      }
+      accum += segLens[i];
+    }
+    const r = ts(13);
+    ctx.globalAlpha = 1;
     ctx.beginPath();
-    ctx.arc(tx(mx), ty(my), r, 0, Math.PI * 2);
+    ctx.arc(tx(badgePos.x), ty(badgePos.y), r, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.font = `bold ${ts(10)}px system-ui`;
+    ctx.font = `bold ${ts(11)}px system-ui`;
     ctx.fillStyle = isDark ? '#0d1117' : '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(String(num), tx(mx), ty(my));
+    ctx.fillText(String(num), tx(badgePos.x), ty(badgePos.y));
   }
   ctx.restore();
 }
@@ -338,49 +504,97 @@ function drawLines() {
   lines.forEach(l => {
     const fn = N[l.from], tn = N[l.to];
     if (!fn || !tn) return;
-    let fp = edgePt(fn, tn.x + tn.w / 2, tn.y + tn.h / 2);
-    let tp = edgePt(tn, fn.x + fn.w / 2, fn.y + fn.h / 2);
-    drawArrowLine(fp.x, fp.y, tp.x, tp.y, l.color, l.num, 0.8);
+    let points = [];
+    if (l.waypoints) {
+      // Use waypoints
+      const fp = edgePt(fn, l.waypoints[0].x, l.waypoints[0].y, l.fromOffset);
+      const tp = edgePt(tn, l.waypoints[l.waypoints.length - 1].x, l.waypoints[l.waypoints.length - 1].y, l.toOffset);
+      points = [fp, ...l.waypoints, tp];
+    } else {
+      // Direct line
+      const fp = edgePt(fn, tn.x + tn.w / 2, tn.y + tn.h / 2, l.fromOffset);
+      const tp = edgePt(tn, fn.x + fn.w / 2, fn.y + fn.h / 2, l.toOffset);
+      points = [fp, tp];
+    }
+    drawArrowLine(points, l.color, l.num, 0.8);
   });
 }
 
 class Dot {
-  constructor(fKey, tKey, color, speed, cb) {
+  constructor(fKey, tKey, color, speed, cb, opts) {
     this.color = color;
-    this.speed = speed || 0.012;
     this.t = 0;
     this.cb = cb;
     this.alive = true;
     const fn = N[fKey], tn = N[tKey];
-    const fp = edgePt(fn, tn.x + tn.w / 2, tn.y + tn.h / 2);
-    const tp = edgePt(tn, fn.x + fn.w / 2, fn.y + fn.h / 2);
-    this.fx = fp.x; this.fy = fp.y;
-    this.tx = tp.x; this.ty = tp.y;
-    const dx = this.tx - this.fx, dy = this.ty - this.fy;
-    this.len = Math.sqrt(dx * dx + dy * dy);
+    opts = opts || {};
+
+    // Build path with waypoints
+    if (opts.waypoints) {
+      const fp = edgePt(fn, opts.waypoints[0].x, opts.waypoints[0].y, opts.fromOffset);
+      const tp = edgePt(tn, opts.waypoints[opts.waypoints.length - 1].x, opts.waypoints[opts.waypoints.length - 1].y, opts.toOffset);
+      this.pts = [fp, ...opts.waypoints, tp];
+    } else {
+      const fp = edgePt(fn, tn.x + tn.w / 2, tn.y + tn.h / 2, opts.fromOffset);
+      const tp = edgePt(tn, fn.x + fn.w / 2, fn.y + fn.h / 2, opts.toOffset);
+      this.pts = [fp, tp];
+    }
+
+    // Calculate segment lengths
+    this.segLens = [];
+    this.totalLen = 0;
+    for (let i = 1; i < this.pts.length; i++) {
+      const dx = this.pts[i].x - this.pts[i - 1].x;
+      const dy = this.pts[i].y - this.pts[i - 1].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      this.segLens.push(len);
+      this.totalLen += len;
+    }
+
+    // Normalize speed for consistent pixel velocity
     const pxPerFrame = 4;
-    this.speed = this.len > 0 ? (pxPerFrame / this.len) * (speed / 0.02) : speed;
+    this.speed = this.totalLen > 0 ? (pxPerFrame / this.totalLen) * (speed / 0.02) : speed;
   }
   update() {
     this.t += this.speed;
     if (this.t >= 1) { this.t = 1; this.alive = false; if (this.cb) this.cb(); }
   }
+  posAt(t) {
+    const dist = Math.max(0, Math.min(1, t)) * this.totalLen;
+    let accum = 0;
+    for (let i = 0; i < this.segLens.length; i++) {
+      if (accum + this.segLens[i] >= dist) {
+        const segT = (dist - accum) / this.segLens[i];
+        return {
+          x: this.pts[i].x + (this.pts[i + 1].x - this.pts[i].x) * segT,
+          y: this.pts[i].y + (this.pts[i + 1].y - this.pts[i].y) * segT,
+          seg: i
+        };
+      }
+      accum += this.segLens[i];
+    }
+    return { x: this.pts[this.pts.length - 1].x, y: this.pts[this.pts.length - 1].y, seg: this.segLens.length - 1 };
+  }
   draw() {
-    const t = this.t;
-    const x = this.fx + (this.tx - this.fx) * t;
-    const y = this.fy + (this.ty - this.fy) * t;
+    const pos = this.posAt(this.t);
     ctx.save();
+    // Draw trail
     ctx.beginPath();
-    ctx.moveTo(tx(this.fx), ty(this.fy));
-    ctx.lineTo(tx(x), ty(y));
+    ctx.moveTo(tx(this.pts[0].x), ty(this.pts[0].y));
+    for (let i = 0; i < pos.seg; i++) {
+      ctx.lineTo(tx(this.pts[i + 1].x), ty(this.pts[i + 1].y));
+    }
+    ctx.lineTo(tx(pos.x), ty(pos.y));
     ctx.strokeStyle = this.color;
     ctx.lineWidth = ts(2);
     ctx.globalAlpha = 0.3;
     ctx.stroke();
-    const ang = Math.atan2(this.ty - this.fy, this.tx - this.fx);
+    // Draw packet
     ctx.globalAlpha = 1;
+    const si = Math.min(pos.seg, this.pts.length - 2);
+    const ang = Math.atan2(this.pts[si + 1].y - this.pts[si].y, this.pts[si + 1].x - this.pts[si].x);
     ctx.save();
-    ctx.translate(tx(x), ty(y));
+    ctx.translate(tx(pos.x), ty(pos.y));
     ctx.rotate(ang);
     const pw = ts(13), ph = ts(7);
     ctx.beginPath();
@@ -401,10 +615,24 @@ class Dot {
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
+  drawBounds();
   drawLines();
   Object.keys(N).forEach(k => drawBox(k));
   dots.forEach(d => { d.update(); d.draw(); });
   dots = dots.filter(d => d.alive);
+  if (highlightKey && N[highlightKey]) {
+    const n = N[highlightKey];
+    const pad = 8;
+    ctx.save();
+    ctx.shadowColor = n.color || '#58a6ff';
+    ctx.shadowBlur = ts(30);
+    ctx.strokeStyle = n.color || '#58a6ff';
+    ctx.lineWidth = ts(3);
+    ctx.beginPath();
+    ctx.roundRect(tx(n.x) - pad, ty(n.y) - pad, ts(n.w) + pad * 2, ts(n.h) + pad * 2, ts(10));
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 function animate() { draw(); animFrame = requestAnimationFrame(animate); }
 
@@ -413,7 +641,7 @@ canvas.addEventListener('click', e => {
   for (const k of Object.keys(tips)) {
     const n = N[k];
     if (mx >= n.x && mx <= n.x + n.w && my >= n.y && my <= n.y + n.h) {
-      showModal(k);
+      showOverlay(k);
       return;
     }
   }
@@ -467,7 +695,7 @@ function initInspector() {
 function renderInsp() {
   const el = document.getElementById('insp-content');
   let h = `<div class="insp-plugin">${esc(inspStepLabel)}</div>`;
-  h += '<div class="insp-sec">HTTP:</div>';
+  h += '<div class="insp-sec">Headers:</div>';
   inspHeaders.forEach(l => { h += `<div class="insp-line ${l.s}">${esc(l.v)}</div>`; });
   h += '<div class="insp-sec">Body:</div>';
   inspBody.forEach(l => { h += `<div class="insp-line ${l.s}">${esc(l.v)}</div>`; });
@@ -482,74 +710,112 @@ function inspStep(stepNum) {
   if (activeFlow === 'disaggregated') {
     switch (stepNum) {
       case 1: inspStepLabel = '① Client → Gateway'; break;
-      case 2: inspStepLabel = '② Gateway → llm-d Router'; break;
-      case 3: inspStepLabel = '③ Router: New prompt → Prefill'; inspMeta = [{v:'route_decision = "prefill"', s:'add'}]; break;
-      case 4: inspStepLabel = '④ Router → Prefill Pod'; break;
-      case 5: inspStepLabel = '⑤ Prefill processes prompt'; inspMeta.push({v:'kv_cache_size = "2.3GB"', s:'add'}); break;
-      case 6: inspStepLabel = '⑥ Prefill saves KV cache'; break;
-      case 7: inspStepLabel = '⑦ Prefill → Router (first token + cache ID)'; inspMeta.push({v:'cache_id = "conv-abc123"', s:'add'}); break;
-      case 8: inspStepLabel = '⑧ Router → Decode Pod (follow-up)'; break;
-      case 9: inspStepLabel = '⑨ Decode loads KV cache'; break;
-      case 10: inspStepLabel = '⑩ Decode generates tokens'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [{"message":{"content":"Hello!"}}]', s:'keep'}]; inspMeta=[]; break;
-      case 11: inspStepLabel = '⑪ Response → Client'; break;
+      case 2: inspStepLabel = '② Gateway → EPP'; break;
+      case 3: inspStepLabel = 'EPP selects pods'; inspMeta = [{v:'routing_mode = "disaggregated"', s:'add'}, {v:'prefill_pod = "pod-b-a100"', s:'add'}, {v:'decode_pod = "pod-a-l4"', s:'add'}]; break;
+      case 4: inspStepLabel = '③ EPP → Gateway'; break;
+      case 5: inspStepLabel = '④ Gateway → Sidecar'; break;
+      case 6: inspStepLabel = '⑤ Sidecar → Prefill'; break;
+      case 7: inspStepLabel = 'Prefill processes prompt'; inspMeta.push({v:'kv_cache_size = "2.3GB"', s:'add'}, {v:'first_token_latency = "120ms"', s:'add'}); break;
+      case 8: inspStepLabel = '⑥ Prefill → Sidecar'; break;
+      case 9: inspStepLabel = '⑦ Sidecar → Decode'; break;
+      case 10: inspStepLabel = '⑧ Decode → NIXL'; break;
+      case 11: inspStepLabel = '⑨ NIXL → Prefill'; break;
+      case 12: inspStepLabel = '⑩ Prefill → NIXL (KV)'; break;
+      case 13: inspStepLabel = '⑪ NIXL → Decode (KV)'; break;
+      case 14: inspStepLabel = 'Decode generates tokens'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [{"message":{"content":"Hello!"}}]', s:'keep'}]; inspMeta=[{v:'tokens_generated = 50', s:'add'}, {v:'decode_latency = "45ms"', s:'add'}]; break;
+      case 15: inspStepLabel = '⑫ Decode → Sidecar'; break;
+      case 16: inspStepLabel = '⑬ Sidecar → Gateway'; break;
+      case 17: inspStepLabel = '⑭ Gateway → Client'; inspMeta=[]; break;
     }
   } else if (activeFlow === 'unified') {
     switch (stepNum) {
       case 1: inspStepLabel = '① Client → Gateway'; break;
-      case 2: inspStepLabel = '② Gateway → vLLM Pod'; break;
-      case 3: inspStepLabel = '③ vLLM: Prefill + Decode'; inspMeta=[{v:'mode = "unified"', s:'add'}]; break;
-      case 4: inspStepLabel = '④ Response → Gateway'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [...]', s:'keep'}]; inspMeta=[]; break;
-      case 5: inspStepLabel = '⑤ Response → Client'; break;
+      case 2: inspStepLabel = '② Gateway → EPP'; break;
+      case 3: inspStepLabel = 'EPP selects pod'; inspMeta=[{v:'routing_mode = "unified"', s:'add'}, {v:'selected_pod = "unified-a100-1"', s:'add'}]; break;
+      case 4: inspStepLabel = '③ EPP → Gateway'; break;
+      case 5: inspStepLabel = '④ Gateway → Unified vLLM'; break;
+      case 6: inspStepLabel = 'vLLM: Prefill + Decode'; inspMeta.push({v:'mode = "unified"', s:'add'}, {v:'tensor_parallel = 8', s:'add'}); break;
+      case 7: inspStepLabel = '⑤ Unified → Gateway'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [{"message":{"content":"Hello!"}}]', s:'keep'}]; inspMeta=[]; break;
+      case 8: inspStepLabel = '⑥ Gateway → Client'; break;
     }
   } else if (activeFlow === 'multinode') {
     switch (stepNum) {
       case 1: inspStepLabel = '① Client → Gateway'; break;
-      case 2: inspStepLabel = '② Gateway → KServe'; break;
-      case 3: inspStepLabel = '③ KServe → llm-d Scheduler'; break;
-      case 4: inspStepLabel = '④ Scheduler selects Leader+Worker'; inspMeta=[{v:'leader_node = "p5.48xlarge-1"', s:'add'}, {v:'worker_node = "p5.48xlarge-2"', s:'add'}]; break;
-      case 5: inspStepLabel = '⑤ Request → LWS (Leader)'; break;
-      case 6: inspStepLabel = '⑥ Leader distributes to Worker'; break;
-      case 7: inspStepLabel = '⑦ Leader+Worker compute'; inspMeta.push({v:'tensor_parallel_size = 16', s:'add'}); break;
-      case 8: inspStepLabel = '⑧ Results aggregated by Leader'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [...]', s:'keep'}]; inspMeta=[]; break;
-      case 9: inspStepLabel = '⑨ Response → Client'; break;
+      case 2: inspStepLabel = '② Gateway → EPP'; break;
+      case 3: inspStepLabel = 'EPP selects pod'; inspMeta=[{v:'routing_mode = "multinode"', s:'add'}, {v:'leader_pod = "leader-1"', s:'add'}, {v:'worker_count = 8', s:'add'}, {v:'tensor_parallel = 8', s:'add'}]; break;
+      case 4: inspStepLabel = '③ EPP → Gateway'; break;
+      case 5: inspStepLabel = '④ Gateway → Leader'; break;
+      case 6: inspStepLabel = 'Leader broadcasts'; inspMeta.push({v:'broadcast_mode = "all_workers"', s:'add'}); break;
+      case 7: inspStepLabel = '⑤ Leader → Worker 1'; break;
+      case 8: inspStepLabel = '⑥ Leader → Worker 2'; break;
+      case 9: inspStepLabel = '⑦ Leader → Worker 3'; break;
+      case 10: inspStepLabel = 'Workers compute'; inspMeta.push({v:'model_shard = "1/8, 2/8, 3/8..."', s:'add'}); break;
+      case 11: inspStepLabel = 'Workers compute'; break;
+      case 12: inspStepLabel = 'Workers compute'; break;
+      case 13: inspStepLabel = '⑧ Worker 1 → Leader'; break;
+      case 14: inspStepLabel = '⑨ Worker 2 → Leader'; break;
+      case 15: inspStepLabel = '⑩ Worker 3 → Leader'; break;
+      case 16: inspStepLabel = 'Leader aggregates'; setInspPhase('response'); inspHeaders=[{v:'HTTP/1.1 200 OK', s:'keep'}]; inspBody=[{v:'"choices": [{"message":{"content":"Hello!"}}]', s:'keep'}]; inspMeta=[{v:'aggregation = "all_reduce"', s:'add'}]; break;
+      case 17: inspStepLabel = '⑪ Leader → Gateway'; inspMeta=[]; break;
+      case 18: inspStepLabel = '⑫ Gateway → Client'; break;
     }
   }
   renderInsp();
 }
 
 let activeFlow = 'disaggregated';
+
+// Disaggregated serving flow - data plane request path
 const flowDisaggregated = [
-  { t: '1. Client → Gateway', mode: 'arrow', f: 'client', to: 'gateway', c: '#58a6ff', num: 1 },
-  { t: '2. Gateway → llm-d Router', mode: 'arrow', f: 'gateway', to: 'router', c: '#58a6ff', num: 2 },
-  { t: '3. Router: New prompt → Prefill', mode: 'lightup', target: 'router', badge: 3 },
-  { t: '4. Router → Prefill Pod', mode: 'arrow', f: 'router', to: 'prefill', c: '#58a6ff', num: 4 },
-  { t: '5. Prefill processes prompt', mode: 'lightup', target: 'prefill', badge: 5 },
-  { t: '6. Prefill saves KV cache', mode: 'arrow', f: 'prefill', to: 'kvcache', c: '#d2a8ff', num: 6 },
-  { t: '7. Prefill → Router (first token + cache ID)', mode: 'arrow', f: 'prefill', to: 'router', c: '#d2a8ff', num: 7 },
-  { t: '8. Router → Decode Pod (follow-up)', mode: 'arrow', f: 'router', to: 'decode', c: '#58a6ff', num: 8 },
-  { t: '9. Decode loads KV cache', mode: 'arrow', f: 'kvcache', to: 'decode', c: '#8b949e', num: 9 },
-  { t: '10. Decode generates tokens', mode: 'lightup', target: 'decode', badge: 10 },
-  { t: '11. Response → Client', mode: 'arrow', f: 'decode', to: 'client', c: '#3fb950', num: 11 },
+  { t: '1. Client → Gateway', mode: 'arrow', f: 'user', to: 'gateway', c: '#58a6ff', num: 1 },
+  { t: '2. Gateway → EPP (ext_proc)', mode: 'arrow', f: 'gateway', to: 'epp', c: '#58a6ff', num: 2, glow: 'router_box', fromOffset: -25, toOffset: -25 },
+  { t: 'EPP selects pods', mode: 'lightup', target: 'epp' },
+  { t: '3. EPP → Gateway (selected pods)', mode: 'arrow', f: 'epp', to: 'gateway', c: '#58a6ff', num: 3, fromOffset: 25, toOffset: 25 },
+  { t: '4. Gateway → Sidecar', mode: 'arrow', f: 'gateway', to: 'sidecar', c: '#58a6ff', num: 4, glow: 'inferencepool_box', fromOffset: -50, toOffset: -35 },
+  { t: '5. Sidecar → Prefill Pod B', mode: 'arrow', f: 'sidecar', to: 'prefill', c: '#d2a8ff', num: 5, fromOffset: -50, toOffset: -30 },
+  { t: 'Prefill processes prompt', mode: 'lightup', target: 'prefill' },
+  { t: '6. Prefill → Sidecar (first token)', mode: 'arrow', f: 'prefill', to: 'sidecar', c: '#d2a8ff', num: 6, fromOffset: 30, toOffset: 50 },
+  { t: '7. Sidecar → Decode Pod A', mode: 'arrow', f: 'sidecar', to: 'decode', c: '#79c0ff', num: 7, fromOffset: -20, toOffset: -40 },
+  { t: '8. Decode → NIXL (request KV)', mode: 'arrow', f: 'decode', to: 'nixl', c: '#8b949e', num: 8, fromOffset: -30, toOffset: -30 },
+  { t: '9. NIXL → Prefill (fetch KV)', mode: 'arrow', f: 'nixl', to: 'prefill', c: '#8b949e', num: 9, fromOffset: -20, toOffset: 30 },
+  { t: '10. Prefill → NIXL (KV cache)', mode: 'arrow', f: 'prefill', to: 'nixl', c: '#8b949e', num: 10, fromOffset: -30, toOffset: 20 },
+  { t: '11. NIXL → Decode (KV cache)', mode: 'arrow', f: 'nixl', to: 'decode', c: '#8b949e', num: 11, fromOffset: 30, toOffset: 30 },
+  { t: 'Decode generates tokens', mode: 'lightup', target: 'decode' },
+  { t: '12. Decode → Sidecar (response)', mode: 'arrow', f: 'decode', to: 'sidecar', c: '#3fb950', num: 12, fromOffset: 40, toOffset: 20 },
+  { t: '13. Sidecar → Gateway (response)', mode: 'arrow', f: 'sidecar', to: 'gateway', c: '#3fb950', num: 13, fromOffset: 35, toOffset: 50 },
+  { t: '14. Gateway → Client', mode: 'arrow', f: 'gateway', to: 'user', c: '#3fb950', num: 14 },
 ];
 
 const flowUnified = [
-  { t: '1. Client → Gateway', mode: 'arrow', f: 'client', to: 'gateway', c: '#58a6ff', num: 1 },
-  { t: '2. Gateway → vLLM Pod', mode: 'arrow', f: 'gateway', to: 'prefill', c: '#58a6ff', num: 2 },
-  { t: '3. vLLM: Prefill + Decode in one pod', mode: 'lightup', target: 'prefill', badge: 3 },
-  { t: '4. Response → Gateway', mode: 'arrow', f: 'prefill', to: 'gateway', c: '#3fb950', num: 4 },
-  { t: '5. Response → Client', mode: 'arrow', f: 'gateway', to: 'client', c: '#3fb950', num: 5 },
+  { t: '1. Client → Gateway', mode: 'arrow', f: 'user', to: 'gateway', c: '#58a6ff', num: 1 },
+  { t: '2. Gateway → EPP (ext_proc)', mode: 'arrow', f: 'gateway', to: 'epp', c: '#58a6ff', num: 2, glow: 'router_box', fromOffset: -25, toOffset: -25 },
+  { t: 'EPP selects Unified pod', mode: 'lightup', target: 'epp' },
+  { t: '3. EPP → Gateway (selected pod)', mode: 'arrow', f: 'epp', to: 'gateway', c: '#58a6ff', num: 3, fromOffset: 25, toOffset: 25 },
+  { t: '4. Gateway → Unified vLLM Pod', mode: 'arrow', f: 'gateway', to: 'unified', c: '#58a6ff', num: 4, glow: 'inferencepool_box', fromOffset: -30, toOffset: -30 },
+  { t: 'vLLM: Prefill + Decode', mode: 'lightup', target: 'unified' },
+  { t: '5. Unified → Gateway (response)', mode: 'arrow', f: 'unified', to: 'gateway', c: '#3fb950', num: 5, fromOffset: 30, toOffset: 50 },
+  { t: '6. Gateway → Client', mode: 'arrow', f: 'gateway', to: 'user', c: '#3fb950', num: 6 },
 ];
 
 const flowMultinode = [
-  { t: '1. Client → Gateway', mode: 'arrow', f: 'client', to: 'gateway', c: '#58a6ff', num: 1 },
-  { t: '2. Gateway → KServe', mode: 'arrow', f: 'gateway', to: 'kserve', c: '#58a6ff', num: 2 },
-  { t: '3. KServe → llm-d Scheduler', mode: 'arrow', f: 'kserve', to: 'scheduler', c: '#58a6ff', num: 3 },
-  { t: '4. Scheduler selects Leader+Worker nodes', mode: 'lightup', target: 'scheduler', badge: 4 },
-  { t: '5. Request → LWS (Leader Pod)', mode: 'arrow', f: 'scheduler', to: 'leader', c: '#58a6ff', num: 5 },
-  { t: '6. Leader distributes to Worker', mode: 'arrow', f: 'leader', to: 'worker', c: '#d2a8ff', num: 6 },
-  { t: '7. Leader+Worker compute model shards', mode: 'lightup', target: 'worker', badge: 7 },
-  { t: '8. Results aggregated by Leader', mode: 'arrow', f: 'worker', to: 'leader', c: '#79c0ff', num: 8 },
-  { t: '9. Response → Client', mode: 'arrow', f: 'leader', to: 'client', c: '#3fb950', num: 9 },
+  { t: '1. Client → Gateway', mode: 'arrow', f: 'user', to: 'gateway', c: '#58a6ff', num: 1 },
+  { t: '2. Gateway → EPP (ext_proc)', mode: 'arrow', f: 'gateway', to: 'epp', c: '#58a6ff', num: 2, glow: 'router_box', fromOffset: -25, toOffset: -25 },
+  { t: 'EPP selects Leader pod', mode: 'lightup', target: 'epp' },
+  { t: '3. EPP → Gateway (selected pod)', mode: 'arrow', f: 'epp', to: 'gateway', c: '#58a6ff', num: 3, fromOffset: 25, toOffset: 25 },
+  { t: '4. Gateway → Leader Pod', mode: 'arrow', f: 'gateway', to: 'leader', c: '#58a6ff', num: 4, glow: 'inferencepool_box', fromOffset: -30, toOffset: -30 },
+  { t: 'Leader broadcasts to workers', mode: 'lightup', target: 'leader' },
+  { t: '5. Leader → Worker 1', mode: 'arrow', f: 'leader', to: 'worker1', c: '#d2a8ff', num: 5, fromOffset: -60, toOffset: -30 },
+  { t: '6. Leader → Worker 2', mode: 'arrow', f: 'leader', to: 'worker2', c: '#d2a8ff', num: 6, fromOffset: -20, toOffset: -20 },
+  { t: '7. Leader → Worker 3', mode: 'arrow', f: 'leader', to: 'worker3', c: '#d2a8ff', num: 7, fromOffset: 20, toOffset: -20 },
+  { t: 'Workers compute shards', mode: 'lightup', target: 'worker1' },
+  { t: 'Workers compute shards', mode: 'lightup', target: 'worker2' },
+  { t: 'Workers compute shards', mode: 'lightup', target: 'worker3' },
+  { t: '8. Worker 1 → Leader', mode: 'arrow', f: 'worker1', to: 'leader', c: '#79c0ff', num: 8, fromOffset: 30, toOffset: -50 },
+  { t: '9. Worker 2 → Leader', mode: 'arrow', f: 'worker2', to: 'leader', c: '#79c0ff', num: 9, fromOffset: 20, toOffset: -10 },
+  { t: '10. Worker 3 → Leader', mode: 'arrow', f: 'worker3', to: 'leader', c: '#79c0ff', num: 10, fromOffset: -20, toOffset: 10 },
+  { t: 'Leader aggregates results', mode: 'lightup', target: 'leader' },
+  { t: '11. Leader → Gateway (response)', mode: 'arrow', f: 'leader', to: 'gateway', c: '#3fb950', num: 11, fromOffset: 0, toOffset: 50 },
+  { t: '12. Gateway → Client', mode: 'arrow', f: 'gateway', to: 'user', c: '#3fb950', num: 12 },
 ];
 
 const flowMap = { disaggregated: flowDisaggregated, unified: flowUnified, multinode: flowMultinode };
@@ -569,7 +835,13 @@ function cycleSpeed() {
   document.getElementById('speed-btn').textContent = playbackSpeed + 'x';
 }
 
-function stepLine(s) { return { from: s.f, to: s.to, color: s.c, num: s.num }; }
+function stepLine(s) {
+  const line = { from: s.f, to: s.to, color: s.c, num: s.num };
+  if (s.waypoints) line.waypoints = s.waypoints;
+  if (s.fromOffset !== undefined) line.fromOffset = s.fromOffset;
+  if (s.toOffset !== undefined) line.toOffset = s.toOffset;
+  return line;
+}
 
 let stepOnceMode = false;
 function stepOnce() {
@@ -598,24 +870,30 @@ function execStep() {
 
   if (s.mode === 'arrow') {
     if (s.f) activeNodes.add(s.f);
+    const dotOpts = {};
+    if (s.waypoints) dotOpts.waypoints = s.waypoints;
+    if (s.fromOffset !== undefined) dotOpts.fromOffset = s.fromOffset;
+    if (s.toOffset !== undefined) dotOpts.toOffset = s.toOffset;
     dots.push(new Dot(s.f, s.to, s.c, 0.02 * playbackSpeed, () => {
-      lines.push(stepLine(s)); activeNodes.add(s.to); el.className = 'step done'; saveSnapshot(si); runStepIndex++;
+      lines.push(stepLine(s));
+      if (s.glow) glowing.add(s.glow);
+      activeNodes.add(s.to); el.className = 'step done'; saveSnapshot(si); runStepIndex++;
       if (stepOnceMode) { stepOnceMode = false; paused = true; running = false; updatePlayBtn(); }
       else if (running && !paused) stepTimer = setTimeout(execStep, 300 / playbackSpeed);
-    }));
+    }, dotOpts));
   } else if (s.mode === 'lightup') {
-    fading[s.target] = Date.now(); activeNodes.add(s.target); badges[s.target] = s.badge;
+    fading[s.target] = Date.now(); activeNodes.add(s.target);
     el.className = 'step done'; saveSnapshot(si); runStepIndex++;
     if (stepOnceMode) { stepOnceMode = false; paused = true; running = false; updatePlayBtn(); }
     else if (running && !paused) stepTimer = setTimeout(execStep, 800 / playbackSpeed);
   }
 }
 
-function saveSnapshot(stepIdx) { snapshots[stepIdx] = { activeNodes: new Set(activeNodes), badges: JSON.parse(JSON.stringify(badges)), lines: JSON.parse(JSON.stringify(lines)) }; }
+function saveSnapshot(stepIdx) { snapshots[stepIdx] = { activeNodes: new Set(activeNodes), badges: JSON.parse(JSON.stringify(badges)), lines: JSON.parse(JSON.stringify(lines)), glowing: new Set(glowing) }; }
 function restoreSnapshot(stepIdx) {
-  if (stepIdx < 0) { activeNodes.clear(); badges = {}; lines = []; return; }
+  if (stepIdx < 0) { activeNodes.clear(); badges = {}; lines = []; glowing.clear(); return; }
   const snap = snapshots[stepIdx]; if (!snap) return;
-  activeNodes = new Set(snap.activeNodes); badges = JSON.parse(JSON.stringify(snap.badges)); lines = JSON.parse(JSON.stringify(snap.lines));
+  activeNodes = new Set(snap.activeNodes); badges = JSON.parse(JSON.stringify(snap.badges)); lines = JSON.parse(JSON.stringify(snap.lines)); glowing = new Set(snap.glowing);
 }
 
 function jumpToStep(targetStep) {
@@ -631,7 +909,7 @@ function jumpToStep(targetStep) {
 
 function doReset() {
   running = false; paused = false; runStepIndex = 0; if (stepTimer) clearTimeout(stepTimer);
-  dots = []; activeNodes.clear(); badges = {}; lines = []; fading = {}; snapshots = [];
+  dots = []; activeNodes.clear(); badges = {}; lines = []; fading = {}; snapshots = []; glowing.clear();
   initSteps(); updatePlayBtn();
   document.getElementById('insp-content').innerHTML = '<div style="color:#8b949e;font-family:-apple-system,sans-serif;font-size:13px">Press Start to see the flow</div>';
   if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
